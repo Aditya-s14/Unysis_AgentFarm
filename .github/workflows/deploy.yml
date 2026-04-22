@@ -1,0 +1,70 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-images:
+    name: Build Docker images
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract commit SHA
+        id: vars
+        run: echo "sha_short=$(echo ${GITHUB_SHA} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      # TODO: configure registry credentials (GHCR, ECR, Docker Hub, etc.)
+      # - name: Log in to container registry
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: ghcr.io
+      #     username: ${{ github.actor }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          tags: |
+            agentfarm-backend:latest
+            agentfarm-backend:${{ steps.vars.outputs.sha_short }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          tags: |
+            agentfarm-frontend:latest
+            agentfarm-frontend:${{ steps.vars.outputs.sha_short }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max
+
+      # TODO: push to registry once credentials are configured
+      # - name: Push backend image
+      #   run: |
+      #     docker push agentfarm-backend:latest
+      #     docker push agentfarm-backend:${{ steps.vars.outputs.sha_short }}
+      #
+      # - name: Push frontend image
+      #   run: |
+      #     docker push agentfarm-frontend:latest
+      #     docker push agentfarm-frontend:${{ steps.vars.outputs.sha_short }}
+
+      # TODO: add actual deploy step (Render / Fly.io / EC2 / k8s rollout) once target is chosen.
+
+      - name: Summary
+        run: |
+          echo "Built images tagged :latest and :${{ steps.vars.outputs.sha_short }}"
+          echo "Registry push and deploy steps are commented out — configure secrets and uncomment when ready."
