@@ -1,0 +1,41 @@
+plan_external_key,waste_kg_predicted,waste_kg_actual,delivery_time_predicted_h,delivery_time_actual_h,demand_predicted,demand_actual,mandi_id,weekday,crop_type,road_segment,notes,outcome_index
+OUT-2024-001,80,75.0,4.0,4.1,4800,4000,dp-apmc-01,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,1
+OUT-2024-002,83,77.5,4.05,4.15,4980,4150,dp-apmc-02,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,2
+OUT-2024-003,86,80.0,4.1,4.2,5160,4300,dp-apmc-03,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,3
+OUT-2024-004,89,82.5,4.15,4.25,5340,4450,dp-apmc-04,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,4
+OUT-2024-005,92,85.0,4.2,4.3,5520,4600,dp-apmc-05,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,5
+OUT-2024-006,95,87.5,4.25,4.35,5700,4750,dp-apmc-06,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,6
+OUT-2024-007,98,90.0,4.3,4.4,5880,4900,dp-apmc-01,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,7
+OUT-2024-008,101,92.5,4.35,4.45,6060,5050,dp-apmc-02,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,8
+OUT-2024-009,104,95.0,4.4,4.5,6240,5200,dp-apmc-03,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,9
+OUT-2024-010,107,97.5,4.45,4.55,6420,5350,dp-apmc-04,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,10
+OUT-2024-011,110,100.0,4.5,4.6,6600,5500,dp-apmc-05,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,11
+OUT-2024-012,113,102.5,4.55,4.65,6780,5650,dp-apmc-06,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,12
+OUT-2024-013,95,102,5.0,7.0,5100,5050,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,13
+OUT-2024-014,99,106,5.12,7.17,5140,5085,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,14
+OUT-2024-015,103,110,5.24,7.34,5180,5120,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,15
+OUT-2024-016,107,114,5.36,7.5,5220,5155,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,16
+OUT-2024-017,111,118,5.48,7.67,5260,5190,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,17
+OUT-2024-018,115,122,5.6,7.84,5300,5225,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,18
+OUT-2024-019,119,126,5.72,8.01,5340,5260,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,19
+OUT-2024-020,123,130,5.84,8.18,5380,5295,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,20
+OUT-2024-021,127,134,5.96,8.34,5420,5330,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,21
+OUT-2024-022,131,138,6.08,8.51,5460,5365,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,22
+OUT-2024-023,70.0,68.0,3.8,3.8,3200,3104,dp-priv-01,Monday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,23
+OUT-2024-024,72.2,70.0,4.15,4.25,3255,3157,dp-priv-02,Thursday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,24
+OUT-2024-025,74.4,72.0,4.5,4.7,3310,3210,dp-priv-03,Friday,banana,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,25
+OUT-2024-026,76.6,74.0,4.85,4.85,3365,3264,dp-priv-01,Saturday,mango,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,26
+OUT-2024-027,78.8,76.0,5.2,5.3,3420,3317,dp-priv-02,Sunday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,27
+OUT-2024-028,81.0,78.0,3.8,4.0,3475,3370,dp-priv-03,Monday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,28
+OUT-2024-029,83.2,80.0,4.15,4.15,3530,3424,dp-priv-01,Thursday,banana,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,29
+OUT-2024-030,85.4,82.0,4.5,4.6,3585,3477,dp-priv-02,Friday,mango,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,30
+OUT-2024-031,87.6,84.0,4.85,5.05,3640,3530,dp-priv-03,Saturday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,31
+OUT-2024-032,89.8,86.0,5.2,5.2,3695,3584,dp-priv-01,Sunday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,32
+OUT-2024-033,92.0,88.0,3.8,3.9,3750,3637,dp-priv-02,Monday,banana,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,33
+OUT-2024-034,94.2,90.0,4.15,4.35,3805,3690,dp-priv-03,Thursday,mango,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,34
+OUT-2024-035,96.4,92.0,4.5,4.5,3860,3744,dp-priv-01,Friday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,35
+OUT-2024-036,98.6,94.0,4.85,4.95,3915,3797,dp-priv-02,Saturday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,36
+OUT-2024-037,100.8,96.0,5.2,5.4,3970,3850,dp-priv-03,Sunday,banana,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,37
+OUT-2024-038,103.0,98.0,3.8,3.8,4025,3904,dp-priv-01,Monday,mango,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,38
+OUT-2024-039,105.2,100.0,4.15,4.25,4080,3957,dp-priv-02,Thursday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,39
+OUT-2024-040,107.4,102.0,4.5,4.7,4135,4010,dp-priv-03,Friday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,40

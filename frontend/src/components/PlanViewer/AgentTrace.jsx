@@ -4,111 +4,199 @@ import { formatDuration } from '@/utils/formatters';
 /**
  * AgentTrace — vertical timeline of per-agent reasoning steps.
  * Each card is collapsible and shows duration, tool calls, and token usage.
+ *
+ * Backend trace shape (per item):
+ *   { agent_name, start_time, end_time, tools_used, notes, token_count }
+ *
+ * `traces` may also be the wrapper shape `{ agent_steps: [...] }` for
+ * backwards compatibility.
  */
-export default function AgentTrace({ traces }) {
-  // TODO: replace mock with real trace payload from GET /api/run/:id/traces.
-  const mock = [
-    {
-      agent: 'orchestrator',
-      duration_ms: 120,
-      token_count: 0,
-      tool_calls: [{ tool: 'input_validation', duration_ms: 40 }],
-      summary: 'Validated inputs, loaded past outcomes from store.',
-    },
-    {
-      agent: 'weather_agent',
-      duration_ms: 1840,
-      token_count: 420,
-      tool_calls: [
-        { tool: 'openweather.forecast', duration_ms: 950 },
-        { tool: 'redis.cache.set', duration_ms: 20 },
-      ],
-      summary: '5 farms flagged SEVERE, 3 WARNING, 12 NORMAL.',
-    },
-    {
-      agent: 'demand_agent',
-      duration_ms: 1720,
-      token_count: 510,
-      tool_calls: [{ tool: 'outcome_store.query', duration_ms: 210 }],
-      summary: 'Demand forecast adjusted -18% for Mandi A on Tuesday.',
-    },
-    {
-      agent: 'inventory_agent',
-      duration_ms: 610,
-      token_count: 280,
-      tool_calls: [],
-      summary: '3,400 kg at risk of spoilage within 48h.',
-    },
-    {
-      agent: 'logistics_agent',
-      duration_ms: 12_400,
-      token_count: 150,
-      tool_calls: [{ tool: 'ortools.vrp_solve', duration_ms: 11_900 }],
-      summary: 'VRP solved in 11.9s with 10 trucks, 42 stops.',
-    },
-    {
-      agent: 'validator',
-      duration_ms: 85,
-      token_count: 0,
-      tool_calls: [{ tool: 'constraint_checker', duration_ms: 60 }],
-      summary: 'All time windows and capacities satisfied.',
-    },
-  ];
+const AGENT_COLOR = {
+  orchestrator: 'var(--accent)',
+  weather:      '#2196F3',
+  demand:       '#FF9800',
+  inventory:    'var(--green-ok)',
+  logistics:    '#9C27B0',
+  validator:    'var(--muted)',
+};
 
-  const list = traces?.agent_steps || mock;
+function colorForAgent(name) {
+  const key = (name || '').toLowerCase().replace(/_agent$/, '');
+  return AGENT_COLOR[key] || 'var(--accent)';
+}
+
+export default function AgentTrace({ traces }) {
+  const raw = Array.isArray(traces)
+    ? traces
+    : Array.isArray(traces?.agent_steps)
+      ? traces.agent_steps
+      : [];
+
+  const list = raw.map(normaliseStep);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-      <div className="px-5 py-3 border-b border-gray-200">
-        <h3 className="font-semibold text-agri-green-dark">Agent Reasoning Trace</h3>
-        <p className="text-xs text-gray-500">{list.length} agent steps</p>
+    <div
+      className="bg-card"
+      style={{ border: '1px solid var(--border)', borderRadius: '4px' }}
+    >
+      <div
+        className="px-5 py-3 flex items-baseline justify-between"
+        style={{ borderBottom: '1px solid var(--border)' }}
+      >
+        <h3
+          className="font-syne font-bold uppercase text-paper tracking-wider-2"
+          style={{ fontSize: '14px' }}
+        >
+          ▸ Agent Reasoning Trace
+        </h3>
+        <span className="font-mono text-muted text-[11px] tracking-wider">
+          {list.length} steps
+        </span>
       </div>
-      <ol className="relative">
-        {list.map((step, idx) => (
-          <TraceStep key={idx} step={step} isLast={idx === list.length - 1} />
-        ))}
-      </ol>
+
+      {list.length === 0 ? (
+        <p className="px-5 py-6 font-mono text-muted text-[12px]">
+          No traces yet — run a scenario.
+        </p>
+      ) : (
+        <ol className="relative px-5 py-4">
+          {list.map((step, idx) => (
+            <TraceStep
+              key={idx}
+              step={step}
+              isLast={idx === list.length - 1}
+            />
+          ))}
+        </ol>
+      )}
     </div>
   );
 }
 
-/** Collapsible single-step card inside the agent trace timeline. */
+function normaliseStep(t) {
+  if (!t) {
+    return { agent: 'unknown', duration_ms: null, summary: '', tool_calls: [], token_count: 0 };
+  }
+  const agent = t.agent || t.agent_name || 'unknown';
+  const summary = t.summary || t.notes || '';
+  const tokenCount = t.token_count ?? t.tokenCount ?? 0;
+
+  let duration = t.duration_ms;
+  if (duration == null && t.start_time && t.end_time) {
+    const s = Date.parse(t.start_time);
+    const e = Date.parse(t.end_time);
+    if (!Number.isNaN(s) && !Number.isNaN(e)) duration = Math.max(0, e - s);
+  }
+
+  let toolCalls = [];
+  if (Array.isArray(t.tool_calls)) {
+    toolCalls = t.tool_calls;
+  } else if (Array.isArray(t.tools_used)) {
+    toolCalls = t.tools_used.map((tool) =>
+      typeof tool === 'string' ? { tool, duration_ms: null } : tool,
+    );
+  }
+
+  return { agent, duration_ms: duration, token_count: tokenCount, summary, tool_calls: toolCalls };
+}
+
 function TraceStep({ step, isLast }) {
   const [open, setOpen] = useState(false);
+  const color = colorForAgent(step.agent);
+  const cleanName = step.agent.replace(/_agent$/, '').replace(/_/g, ' ');
+
   return (
-    <li className="relative pl-10 pr-5 py-4">
-      <span className="absolute left-4 top-5 w-3 h-3 rounded-full bg-agri-green" />
+    <li className="relative pb-4">
       {!isLast && (
-        <span className="absolute left-[21px] top-8 bottom-0 w-px bg-gray-200" />
+        <span
+          className="absolute left-[6px] top-7"
+          style={{
+            bottom: '0',
+            width: '1px',
+            background: 'var(--border)',
+          }}
+        />
       )}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full text-left"
+        className="w-full text-left flex gap-3"
       >
-        <div className="flex justify-between items-baseline">
-          <span className="font-medium text-sm">{step.agent}</span>
-          <span className="text-xs text-gray-500">
-            {formatDuration(step.duration_ms)} • {step.token_count ?? 0} tokens
-          </span>
-        </div>
-        <p className="text-xs text-gray-600 mt-1">{step.summary}</p>
-      </button>
-      {open && (
-        <div className="mt-3 bg-gray-50 rounded-md p-3 text-xs space-y-1">
-          <p className="font-semibold text-gray-700">Tool calls</p>
-          {step.tool_calls?.length ? (
-            step.tool_calls.map((tc, i) => (
-              <div key={i} className="flex justify-between">
-                <span>{tc.tool}</span>
-                <span className="text-gray-500">{formatDuration(tc.duration_ms)}</span>
-              </div>
-            ))
-          ) : (
-            <p className="text-gray-500 italic">No tool calls</p>
+        <span
+          className="mt-1.5 shrink-0"
+          style={{
+            display: 'inline-block',
+            width: 12,
+            height: 12,
+            background: color,
+            borderRadius: '2px',
+          }}
+        />
+        <div
+          className="flex-1 p-3"
+          style={{
+            background: 'rgba(255, 248, 231, 0.02)',
+            borderLeft: `3px solid ${color}`,
+            borderRadius: '2px',
+          }}
+        >
+          <div className="flex justify-between items-baseline gap-3 flex-wrap">
+            <span
+              className="font-syne font-bold uppercase tracking-wider"
+              style={{ color: 'var(--text)', fontSize: '13px' }}
+            >
+              {cleanName}
+            </span>
+            <span
+              className="font-mono text-muted"
+              style={{ fontSize: '0.75rem' }}
+            >
+              {step.duration_ms != null ? formatDuration(step.duration_ms) : '—'}
+              {' · '}
+              {step.token_count ?? 0} tok
+            </span>
+          </div>
+          {step.summary && (
+            <p
+              className="font-mono mt-2 text-[11.5px] leading-relaxed"
+              style={{ color: 'var(--muted)' }}
+            >
+              {step.summary}
+            </p>
+          )}
+          {open && (
+            <div
+              className="mt-3 p-2 font-mono text-[11px]"
+              style={{
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
+                borderRadius: '2px',
+              }}
+            >
+              <p
+                className="uppercase tracking-wider mb-1"
+                style={{ color: 'var(--accent)', fontSize: '10px' }}
+              >
+                ▸ Tool Calls
+              </p>
+              {step.tool_calls?.length ? (
+                step.tool_calls.map((tc, i) => (
+                  <div key={i} className="flex justify-between text-muted">
+                    <span style={{ color: 'var(--text)' }}>
+                      {tc.tool || tc.name || String(tc)}
+                    </span>
+                    <span>
+                      {tc.duration_ms != null ? formatDuration(tc.duration_ms) : ''}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-muted italic">No tool calls</p>
+              )}
+            </div>
           )}
         </div>
-      )}
+      </button>
     </li>
   );
 }

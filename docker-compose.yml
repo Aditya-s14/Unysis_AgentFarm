@@ -1,8 +1,6 @@
-version: "3.9"
-
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16
     container_name: agentfarm_postgres
     restart: unless-stopped
     environment:
@@ -22,7 +20,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: redis:7
     container_name: agentfarm_redis
     restart: unless-stopped
     ports:
@@ -45,8 +43,15 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    # .env brings in API keys (OPENAI_API_KEY, OPENAI_BASE_URL,
+    # GOOGLE_MAPS_API_KEY, OPENWEATHER_API_KEY).  The explicit ``environment``
+    # block below overrides the connection strings so they point at the
+    # docker network hostnames instead of localhost.
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentfarm:agentfarm@postgres:5432/agentfarm
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,6 +59,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
+      - ./data:/app/data:ro
     networks:
       - agentfarm_net
 

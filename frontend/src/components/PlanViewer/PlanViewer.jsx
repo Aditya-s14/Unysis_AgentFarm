@@ -9,7 +9,7 @@ import KPIGrid from '@/components/KPICards/KPIGrid';
 export default function PlanViewer({ run, traces }) {
   if (!run) {
     return (
-      <div className="text-sm text-gray-500 italic">
+      <div className="font-mono text-muted text-[13px] italic">
         No plan loaded. Run a scenario or select a run from the Runs page.
       </div>
     );

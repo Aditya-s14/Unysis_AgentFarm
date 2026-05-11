@@ -8,15 +8,28 @@ import dynamic from 'next/dynamic';
 const InnerMap = dynamic(() => import('./InnerMap'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-[480px] bg-gray-100 rounded-md flex items-center justify-center text-gray-500">
-      Loading map...
+    <div
+      className="w-full h-[480px] flex items-center justify-center font-mono text-muted text-[12px] tracking-wider-2"
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        borderRadius: '4px',
+      }}
+    >
+      ◦ Loading map…
     </div>
   ),
 });
 
 export default function MapView(props) {
   return (
-    <div className="w-full h-[480px] rounded-md overflow-hidden border border-gray-200">
+    <div
+      className="w-full h-[480px] overflow-hidden"
+      style={{
+        border: '1px solid var(--border)',
+        borderRadius: '4px',
+      }}
+    >
       <InnerMap {...props} />
     </div>
   );

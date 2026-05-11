@@ -7,15 +7,29 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        agri: {
-          green: '#2e7d32',
-          'green-dark': '#1b5e20',
-          'green-light': '#a5d6a7',
-          orange: '#ef6c00',
-          'orange-light': '#ffb74d',
-          soil: '#795548',
-          cream: '#fff8e1',
-        },
+        canvas:    'var(--bg)',
+        card:      'var(--bg-card)',
+        line:      'var(--border)',
+        accent:    'var(--accent)',
+        paper:     'var(--text)',
+        muted:     'var(--muted)',
+        ok:        'var(--green-ok)',
+        risk:      'var(--red-risk)',
+        mandi:     'var(--blue-mandi)',
+        purplelog: 'var(--purple-log)',
+        orangedmd: 'var(--orange-dmd)',
+      },
+      fontFamily: {
+        syne: ['Syne', 'system-ui', 'sans-serif'],
+        mono: ['"DM Mono"', 'ui-monospace', 'monospace'],
+      },
+      letterSpacing: {
+        'wider-2': '0.15em',
+        'wider-3': '0.2em',
+      },
+      borderRadius: {
+        sharp: '2px',
+        card: '4px',
       },
     },
   },

@@ -8,7 +8,7 @@ import { API_BASE_URL, formatApiError } from '@/utils/api';
  */
 const client = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120_000,
+  timeout: 300_000, // 5 min — pipeline with 20 farms takes ~60-90s
   headers: {
     'Content-Type': 'application/json',
   },
@@ -44,16 +44,16 @@ export async function getRunTraces(runId) {
 /** POST /api/advisor/query — ask the Advisor Agent a contextual question. */
 export async function queryAdvisor({ runId, sessionId, userQuestion }) {
   const { data } = await client.post('/advisor/query', {
-    runId,
-    sessionId,
-    userQuestion,
+    run_id: runId,
+    session_id: sessionId,
+    question: userQuestion,
   });
   return data;
 }
 
 /** POST /api/outcome/log — log real-world outcomes to feed the learning loop. */
-export async function logOutcome({ runId, outcomes }) {
-  const { data } = await client.post('/outcome/log', { runId, outcomes });
+export async function logOutcome(outcomeBody) {
+  const { data } = await client.post('/outcome/log', outcomeBody);
   return data;
 }
 

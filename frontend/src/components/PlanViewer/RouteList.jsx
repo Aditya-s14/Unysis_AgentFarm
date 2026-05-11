@@ -5,26 +5,57 @@ import { formatKg, formatCurrency } from '@/utils/formatters';
  */
 export default function RouteList({ routes = [] }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-      <div className="px-5 py-3 border-b border-gray-200">
-        <h3 className="font-semibold text-agri-green-dark">Route Assignments</h3>
-        <p className="text-xs text-gray-500">{routes.length} trucks dispatched</p>
+    <div
+      className="bg-card"
+      style={{ border: '1px solid var(--border)', borderRadius: '4px' }}
+    >
+      <div
+        className="px-5 py-3 flex items-baseline justify-between"
+        style={{ borderBottom: '1px solid var(--border)' }}
+      >
+        <h3
+          className="font-syne font-bold uppercase text-paper tracking-wider-2"
+          style={{ fontSize: '14px' }}
+        >
+          ▸ Route Assignments
+        </h3>
+        <span className="font-mono text-muted text-[11px] tracking-wider">
+          {routes.length} TRUCKS
+        </span>
       </div>
       {routes.length === 0 ? (
-        <p className="p-5 text-sm text-gray-500 italic">No routes in this plan yet.</p>
+        <p className="px-5 py-6 font-mono text-muted text-[12px]">
+          No routes in this plan yet.
+        </p>
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul>
           {routes.map((r, idx) => (
-            <li key={r.truckId || idx} className="px-5 py-3 flex justify-between text-sm">
+            <li
+              key={r.truckId || idx}
+              className="px-5 py-3 flex justify-between"
+              style={{ borderTop: idx === 0 ? 'none' : '1px solid var(--border)' }}
+            >
               <div>
-                <p className="font-medium">Truck {r.truckId || `#${idx + 1}`}</p>
-                <p className="text-xs text-gray-500">
-                  {r.stops?.length || 0} stops • {r.distance_km || '--'} km
+                <p
+                  className="font-syne font-bold text-paper"
+                  style={{ fontSize: '13px', letterSpacing: '0.05em' }}
+                >
+                  Truck {r.truckId || `#${idx + 1}`}
+                </p>
+                <p className="font-mono text-muted text-[11px] mt-1">
+                  {r.stops?.length || 0} stops · {r.distance_km || '--'} km
                 </p>
               </div>
               <div className="text-right">
-                <p>{formatKg(r.loadKg)}</p>
-                <p className="text-xs text-gray-500">{formatCurrency(r.cost)}</p>
+                <p
+                  className="font-syne font-bold"
+                  style={{ color: 'var(--accent)', fontSize: '14px' }}
+                >
+                  {formatKg(r.loadKg)}
+                </p>
+                <p className="font-mono text-muted text-[11px] mt-1">
+                  {formatCurrency(r.cost)}
+                </p>
               </div>
             </li>
           ))}

@@ -1,61 +1,132 @@
 import Head from 'next/head';
-import { useState } from 'react';
+import Link from 'next/link';
 import DashboardLayout from '@/components/Dashboard/DashboardLayout';
 import PlanViewer from '@/components/PlanViewer/PlanViewer';
-import useRuns, { useRun, useRunTraces } from '@/hooks/useRuns';
+import { useRun, useRunTraces, useCachedRunResponse } from '@/hooks/useRuns';
+import { useAppContext } from '@/context/AppContext';
 
 /**
- * Runs page — left pane lists past runs, right pane shows the selected plan.
+ * Runs page — shows the most recent run (the one cached in localStorage
+ * by the last scenario submission).  When the backend gains a /api/runs
+ * list endpoint we can extend this to a multi-run picker.
  */
 export default function RunsPage() {
-  const { data: runs, loading } = useRuns();
-  const [selectedId, setSelectedId] = useState(null);
-  const { data: run } = useRun(selectedId);
-  const { data: traces } = useRunTraces(selectedId);
+  const { currentRunId } = useAppContext();
+  const cached = useCachedRunResponse();
+  const runId = cached?.run_id || currentRunId || null;
+
+  const { data: persistedRun, loading, error } = useRun(runId);
+  const { data: traces } = useRunTraces(runId);
+
+  if (!runId) {
+    return (
+      <>
+        <Head>
+          <title>Runs | AgentFarm</title>
+        </Head>
+        <DashboardLayout title="Runs">
+          <div
+            className="bg-card p-8 text-center font-mono text-muted text-[13px]"
+            style={{
+              border: '1px solid var(--border)',
+              borderRadius: '4px',
+            }}
+          >
+            No runs yet.{' '}
+            <Link
+              href="/scenario"
+              className="text-accent tracking-wider-2 hover:underline"
+            >
+              RUN A SCENARIO
+            </Link>{' '}
+            to populate this page.
+          </div>
+        </DashboardLayout>
+      </>
+    );
+  }
+
+  const runForViewer = cached
+    ? {
+        runId: cached.run_id,
+        kpis: cached.kpis,
+        plan: {
+          assignments: (cached.plan?.route_plan?.routes || []).map((r, idx) => ({
+            truckId: r.truck_id || `route-${idx}`,
+            stops: r.stops || [],
+            distance_km: r.distance_km,
+          })),
+        },
+      }
+    : null;
 
   return (
     <>
       <Head>
         <title>Runs | AgentFarm</title>
       </Head>
-      <DashboardLayout title="Runs">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <aside className="lg:col-span-1 bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <h2 className="font-semibold text-agri-green-dark text-sm">All Runs</h2>
-            </div>
-            {loading ? (
-              <p className="p-4 text-sm text-gray-500">Loading...</p>
-            ) : (
-              <ul className="divide-y divide-gray-100">
-                {runs.map((r) => (
-                  <li key={r.runId}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(r.runId)}
-                      className={`w-full text-left px-4 py-3 text-sm transition ${
-                        selectedId === r.runId ? 'bg-agri-green-light/30' : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      <p className="font-medium">{r.runId}</p>
-                      <p className="text-xs text-gray-500">{r.scenarioType}</p>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </aside>
-
-          <section className="lg:col-span-3">
-            {selectedId ? (
-              <PlanViewer run={run} traces={traces} />
-            ) : (
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8 text-center text-sm text-gray-500">
-                Select a run from the list to view its plan.
+      <DashboardLayout title="Runs" subtitle={`Run ${runId?.slice(0, 8) || '—'}`}>
+        <section>
+          <div
+            className="bg-card mb-6"
+            style={{
+              border: '1px solid var(--border)',
+              borderRadius: '4px',
+            }}
+          >
+            <div
+              className="px-5 py-3 flex justify-between items-baseline flex-wrap gap-2"
+              style={{ borderBottom: '1px solid var(--border)' }}
+            >
+              <div>
+                <h2
+                  className="font-syne font-bold uppercase text-paper tracking-wider-2"
+                  style={{ fontSize: '14px' }}
+                >
+                  ▸ Current Run
+                </h2>
+                <p
+                  className="font-mono text-muted text-[11px] break-all mt-1"
+                  style={{ letterSpacing: '0.04em' }}
+                >
+                  {runId}
+                </p>
               </div>
-            )}
-          </section>
-        </div>
+              <Link
+                href="/scenario"
+                className="font-mono text-accent text-[11px] tracking-wider uppercase hover:underline"
+              >
+                Run another →
+              </Link>
+            </div>
+            <div className="px-5 py-3 font-mono text-[11.5px] space-y-1">
+              {loading && (
+                <p className="text-muted">◦ Loading persisted plan from backend…</p>
+              )}
+              {error && (
+                <p style={{ color: 'var(--red-risk)' }}>Backend lookup error: {error}</p>
+              )}
+              {persistedRun && (
+                <p className="text-muted">
+                  Persisted at{' '}
+                  <span className="text-paper">{persistedRun.created_at}</span>{' '}
+                  · validation:{' '}
+                  <span
+                    style={{
+                      color: persistedRun.validation?.valid
+                        ? 'var(--green-ok)'
+                        : 'var(--red-risk)',
+                    }}
+                  >
+                    {persistedRun.validation?.valid ? 'PASSED' : 'FAILED'}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          <PlanViewer run={runForViewer} traces={traces} />
+        </section>
       </DashboardLayout>
     </>
   );

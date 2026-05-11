@@ -67,7 +67,7 @@ chore(ci): add black + flake8 to lint workflow
 - **black** — line length 100, run on save
 - **isort** — profile `black`
 - **flake8** — baseline PEP 8, max line length 100
-- **mypy** — strict on `backend/src` (or `backend/`); type hints everywhere
+- **mypy** — strict on `backend/`; type hints everywhere
 - **Pydantic** for every data model; no raw dicts crossing module boundaries
 
 Run locally:

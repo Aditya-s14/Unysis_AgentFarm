@@ -137,6 +137,8 @@ Target end-to-end time: **under 2 minutes** for 20 farms, 10 demand points, 10 t
 
 ## Memory Architecture — Three Tiers
 
+Implementation lives under `backend/memory/`: `state.py` (Tier 1), `outcome_store.py` (Tier 2), `session_buffer.py` (Tier 3). Postgres outcomes also backfill `demand_point_id` / `road_segment` from `data/sample_outcomes.csv` via `tools.db.backfill_outcome_dims_from_csv` after seed on startup.
+
 ### Tier 1 — Intra-Run (Short-Term)
 
 A typed LangGraph state object (`AgentFarmState` TypedDict) passed between agents within a single run. All fields are Pydantic models — no free-form strings between agents.
@@ -167,7 +169,7 @@ class AgentFarmState(TypedDict):
     retry_count: int
 
     # Orchestrator
-    final_plan: Plan
+    final_plan: Plan | None
     run_id: str
     agent_traces: list[AgentTrace]
 ```

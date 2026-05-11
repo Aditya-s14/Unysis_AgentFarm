@@ -37,18 +37,36 @@ export default function ChatInterface() {
   };
 
   return (
-    <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm h-[70vh]">
-      <div className="px-5 py-3 border-b border-gray-200">
-        <h3 className="font-semibold text-agri-green-dark">Farmer Advisor</h3>
-        <p className="text-xs text-gray-500">
-          Session {sessionId?.slice(0, 8) || '...'} • Run {currentRunId || 'none'}
+    <div
+      className="flex flex-col bg-card h-[70vh]"
+      style={{
+        border: '1px solid var(--border)',
+        borderRadius: '4px',
+      }}
+    >
+      <div
+        className="px-5 py-3 flex items-baseline justify-between flex-wrap gap-2"
+        style={{ borderBottom: '1px solid var(--border)' }}
+      >
+        <h3
+          className="font-syne font-bold tracking-wider-2 uppercase"
+          style={{ color: 'var(--accent)', fontSize: '15px' }}
+        >
+          🌾 KISAN MITRA
+        </h3>
+        <p className="font-mono text-muted text-[11px] tracking-wider">
+          SESSION {sessionId?.slice(0, 8) || '…'} · RUN {currentRunId?.slice(0, 8) || 'NONE'}
         </p>
       </div>
 
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+      <div
+        ref={scrollerRef}
+        className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
+        style={{ background: 'var(--bg)' }}
+      >
         {messages.length === 0 ? (
-          <div className="text-sm text-gray-500 italic">
-            Ask the advisor a question. Examples below.
+          <div className="font-mono text-muted text-[12px] italic">
+            Ask the advisor a question. Try a suggestion below.
           </div>
         ) : (
           messages.map((m, idx) => (
@@ -56,20 +74,34 @@ export default function ChatInterface() {
           ))
         )}
         {loading && (
-          <div className="text-xs text-gray-400 italic">Advisor is thinking...</div>
+          <div className="font-mono text-muted text-[11px] italic">◦ Advisor is thinking…</div>
         )}
         {error && !messages.some((m) => m.error) && (
-          <div className="text-xs text-red-600">{error}</div>
+          <div className="font-mono text-[11px]" style={{ color: 'var(--red-risk)' }}>
+            {error}
+          </div>
         )}
       </div>
 
-      <div className="px-5 py-2 border-t border-gray-100 flex flex-wrap gap-2">
+      <div
+        className="px-5 py-3 flex flex-wrap gap-2"
+        style={{
+          borderTop: '1px solid var(--border)',
+          background: 'var(--bg-card)',
+        }}
+      >
         {SUGGESTIONS.map((s) => (
           <button
             key={s}
             type="button"
             onClick={() => handleSend(s)}
-            className="text-xs px-3 py-1 rounded-full border border-agri-green text-agri-green hover:bg-agri-green-light/30 transition"
+            className="font-mono text-[11px] px-3 py-1.5 transition hover:text-accent hover:border-accent"
+            style={{
+              color: 'var(--muted)',
+              border: '1px solid var(--border)',
+              borderRadius: '2px',
+              background: 'transparent',
+            }}
           >
             {s}
           </button>
@@ -81,21 +113,42 @@ export default function ChatInterface() {
           e.preventDefault();
           handleSend();
         }}
-        className="p-3 border-t border-gray-200 flex gap-2"
+        className="p-3 flex gap-2"
+        style={{ borderTop: '1px solid var(--border)' }}
       >
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about a farm, route, or mandi..."
-          className="flex-1 px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-agri-green"
+          placeholder="Ask about a farm, route, or mandi…"
+          className="flex-1 px-3 py-2 font-mono text-[13px] focus:outline-none transition"
+          style={{
+            background: 'var(--bg)',
+            color: 'var(--text)',
+            border: '1px solid var(--border)',
+            borderRadius: '2px',
+          }}
+          onFocus={(e) => {
+            e.target.style.borderColor = 'var(--accent)';
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = 'var(--border)';
+          }}
         />
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-2 rounded-md bg-agri-green text-white text-sm font-medium hover:bg-agri-green-dark disabled:opacity-60"
+          className="px-5 py-2 font-mono uppercase tracking-wider-2 transition disabled:opacity-50"
+          style={{
+            background: 'var(--accent)',
+            color: '#0D1F0F',
+            fontSize: '11px',
+            fontWeight: 600,
+            borderRadius: '2px',
+            letterSpacing: '0.15em',
+          }}
         >
-          Send
+          Send →
         </button>
       </form>
     </div>

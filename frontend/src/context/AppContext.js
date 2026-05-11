@@ -5,13 +5,44 @@ import { v4 as uuidv4 } from 'uuid';
  * Application-wide state: current run id, advisor session id, and a draft
  * of the scenario the user is currently assembling.
  *
- * This is intentionally small — larger pieces of server state live in
- * react hooks (see src/hooks) and are not cached here.
+ * Persistence model:
+ *   - `currentRunId`  → localStorage["agentfarm_run_id"]
+ *   - `sessionId`     → localStorage["advisor_session_id"]
+ *   - the full last response (with kpis, plan, traces) is also cached
+ *     by the ScenarioForm under "agentfarm_last_response".
+ *
+ * Persisting in localStorage keeps these values stable across page
+ * navigations (Next router) and full browser reloads.
  */
 const AppContext = createContext(null);
 
+const RUN_ID_KEY = 'agentfarm_run_id';
+const SESSION_ID_KEY = 'advisor_session_id';
+
+function safeRead(key) {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeWrite(key, value) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (value === null || value === undefined) {
+      window.localStorage.removeItem(key);
+    } else {
+      window.localStorage.setItem(key, value);
+    }
+  } catch {
+    /* localStorage disabled / quota exceeded */
+  }
+}
+
 export function AppContextProvider({ children }) {
-  const [currentRunId, setCurrentRunId] = useState(null);
+  const [currentRunId, setCurrentRunIdState] = useState(null);
   const [sessionId, setSessionId] = useState(null);
   const [scenarioDraft, setScenarioDraft] = useState({
     scenarioType: 'monsoon_disruption',
@@ -21,15 +52,28 @@ export function AppContextProvider({ children }) {
     constraints: {},
   });
 
-  // Generate a session id once on the client side (keeps SSR stable).
+  // Hydrate from localStorage on mount (client-only).
   useEffect(() => {
-    if (!sessionId) {
-      setSessionId(uuidv4());
+    const storedRunId = safeRead(RUN_ID_KEY);
+    if (storedRunId) setCurrentRunIdState(storedRunId);
+
+    let storedSession = safeRead(SESSION_ID_KEY);
+    if (!storedSession) {
+      storedSession = uuidv4();
+      safeWrite(SESSION_ID_KEY, storedSession);
     }
-  }, [sessionId]);
+    setSessionId(storedSession);
+  }, []);
+
+  const setCurrentRunId = useCallback((id) => {
+    setCurrentRunIdState(id);
+    safeWrite(RUN_ID_KEY, id);
+  }, []);
 
   const resetSession = useCallback(() => {
-    setSessionId(uuidv4());
+    const next = uuidv4();
+    safeWrite(SESSION_ID_KEY, next);
+    setSessionId(next);
   }, []);
 
   const value = useMemo(
@@ -41,7 +85,7 @@ export function AppContextProvider({ children }) {
       scenarioDraft,
       setScenarioDraft,
     }),
-    [currentRunId, sessionId, resetSession, scenarioDraft],
+    [currentRunId, setCurrentRunId, sessionId, resetSession, scenarioDraft],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

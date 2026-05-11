@@ -1,0 +1,175 @@
+"""Orchestrator — pipeline entry and exit bookends.
+
+orchestrator_entry(state):
+  - Generate run_id (uuid4) if not already set.
+  - Validate that farms, demand_points, and trucks are all non-empty.
+  - Load recent Tier-2 outcomes to surface any systematic bias in the current context.
+  - Initialise agent_traces list and log an entry record.
+
+orchestrator_exit(state):
+  - Compute KPI deltas vs naive baseline via metrics.compute_kpi_delta().
+  - If retry_count >= max_retries, flag for human review (still persist).
+  - Persist Plan + RunLog to Postgres via tools.db (graceful no-op if DB unavailable).
+  - Set state["final_plan"].
+
+Neither function calls an LLM; both are pure control flow.
+"""
+
+from __future__ import annotations
+
+import logging
+import uuid
+from datetime import datetime, timezone
+
+from agents.metrics import compute_kpi_delta
+from memory.state import AgentFarmState, AgentTrace
+from models.schemas import Plan, ValidationResult
+
+logger = logging.getLogger(__name__)
+
+_MAX_RETRIES = 2
+
+
+async def orchestrator_entry(state: AgentFarmState) -> AgentFarmState:
+    """Pipeline entry: generate run_id, validate inputs, seed initial trace."""
+    t0 = datetime.now(timezone.utc)
+
+    # Assign run_id if caller didn't supply one
+    if not state.get("run_id"):
+        state["run_id"] = str(uuid.uuid4())
+
+    run_id = state["run_id"]
+
+    # Ensure trace list exists
+    state.setdefault("agent_traces", [])
+    state.setdefault("retry_count", 0)
+
+    farms = state.get("farms") or []
+    demand_points = state.get("demand_points") or []
+    trucks = state.get("trucks") or []
+
+    input_errors: list[str] = []
+    if not farms:
+        input_errors.append("farms list is empty")
+    if not demand_points:
+        input_errors.append("demand_points list is empty")
+    if not trucks:
+        input_errors.append("trucks list is empty")
+
+    # Load recent Tier-2 context to inform downstream agents (advisory only;
+    # agents pull their own focused queries later).
+    recent_outcomes_count = 0
+    try:
+        from tools.db import get_session_maker
+        from models.db_models import PlanOutcomeRow
+        from sqlalchemy import select, func
+
+        async with get_session_maker()() as session:
+            recent_outcomes_count = await session.scalar(
+                select(func.count()).select_from(PlanOutcomeRow)
+            ) or 0
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("orchestrator_entry: could not count outcomes: %s", exc)
+
+    notes = (
+        f"run_id={run_id}; "
+        f"farms={len(farms)}, demand_points={len(demand_points)}, trucks={len(trucks)}; "
+        f"historical_outcomes_available={recent_outcomes_count}; "
+        f"input_errors={input_errors or 'none'}"
+    )
+    trace: AgentTrace = {
+        "agent_name": "orchestrator_entry",
+        "start_time": t0.isoformat(),
+        "end_time": datetime.now(timezone.utc).isoformat(),
+        "tools_used": ["tools.db.count_outcomes"],
+        "notes": notes,
+        "token_count": None,
+    }
+    state["agent_traces"] = [*state["agent_traces"], trace]
+
+    if input_errors:
+        logger.warning("orchestrator_entry validation errors: %s", input_errors)
+    else:
+        logger.info("orchestrator_entry OK run_id=%s", run_id)
+
+    return state
+
+
+async def orchestrator_exit(state: AgentFarmState) -> AgentFarmState:
+    """Pipeline exit: compute KPIs, persist Plan + RunLog, set final_plan."""
+    t0 = datetime.now(timezone.utc)
+    run_id = state.get("run_id") or str(uuid.uuid4())
+
+    # KPI computation
+    kpi = compute_kpi_delta(state)
+
+    # Check if max retries were exhausted
+    retry_count = state.get("retry_count") or 0
+    human_review_needed = retry_count >= _MAX_RETRIES
+    if human_review_needed:
+        logger.warning(
+            "orchestrator_exit: max retries (%d) reached for run %s; flagging for human review",
+            _MAX_RETRIES, run_id,
+        )
+
+    validation = state.get("validation_result")
+    route_plan = state.get("route_plan")
+
+    # Persist to Postgres (graceful skip when DB is unavailable)
+    plan_id: str | None = None
+    try:
+        from tools.db import create_plan, create_run_log
+
+        plan_row = await create_plan(
+            route_plan_json=route_plan.model_dump() if route_plan else {"routes": []},
+            run_id=run_id,
+            validation_json=validation.model_dump() if validation else None,
+        )
+        plan_id = str(plan_row.id)
+
+        kpi_detail = {**kpi, "human_review_needed": human_review_needed}
+        if human_review_needed:
+            kpi_detail["human_review_reason"] = f"max_retries={_MAX_RETRIES} exhausted"
+        # Store all agent traces so GET /api/run/{run_id}/traces can return them.
+        kpi_detail["agent_traces"] = list(state.get("agent_traces") or [])
+
+        await create_run_log(
+            run_id=run_id,
+            message="plan_run_complete",
+            level="warning" if human_review_needed else "info",
+            plan_id=plan_row.id,
+            detail=kpi_detail,
+        )
+        logger.info("orchestrator_exit: persisted plan_id=%s run_id=%s", plan_id, run_id)
+
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("orchestrator_exit: DB persist skipped (%s)", exc)
+
+    # Assemble final_plan
+    state["final_plan"] = Plan(
+        id=plan_id,
+        run_id=run_id,
+        route_plan=route_plan or __import__("models.schemas", fromlist=["RoutePlan"]).RoutePlan(),
+        validation=validation,
+    )
+
+    trace: AgentTrace = {
+        "agent_name": "orchestrator_exit",
+        "start_time": t0.isoformat(),
+        "end_time": datetime.now(timezone.utc).isoformat(),
+        "tools_used": ["metrics.compute_kpi_delta", "tools.db.create_plan", "tools.db.create_run_log"],
+        "notes": (
+            f"plan_id={plan_id or 'not persisted'}; "
+            f"waste_reduction={kpi['waste_reduction_pct']:.1f}%; "
+            f"coverage={kpi['coverage_pct']:.1f}%; "
+            f"human_review={'YES' if human_review_needed else 'no'}"
+        ),
+        "token_count": None,
+    }
+    state["agent_traces"] = [*state.get("agent_traces", []), trace]
+
+    logger.info(
+        "orchestrator_exit: run=%s waste_reduction=%.1f%% coverage=%.1f%%",
+        run_id, kpi["waste_reduction_pct"], kpi["coverage_pct"],
+    )
+    return state

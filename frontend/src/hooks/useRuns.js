@@ -2,6 +2,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { getRun, getRunTraces } from '@/api/client';
 import { formatApiError } from '@/utils/api';
 
+const LAST_RESPONSE_KEY = 'agentfarm_last_response';
+
+function readCachedResponse() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(LAST_RESPONSE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Hook that fetches a single run (plan + KPI summary) by id.
  * Pass `null`/`undefined` to disable the fetch.
@@ -60,35 +73,36 @@ export function useRunTraces(runId) {
 }
 
 /**
- * Hook that returns the list of runs.
- * TODO: wire to a real `/api/runs` list endpoint when backend adds one.
- * For now, returns mock data so the Runs page can render.
+ * Hook that returns the user-visible list of runs.
+ *
+ * Backend has no `/api/runs` list endpoint yet, so we synthesise a one-row
+ * list from the response cached by ScenarioForm in localStorage.  This is
+ * enough for the demo (Dashboard "Recent Runs" + Runs sidebar).
  */
 export function useRuns() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchRuns = useCallback(async () => {
+  const fetchRuns = useCallback(() => {
     setLoading(true);
     setError(null);
     try {
-      // TODO: replace with real API call when backend exposes list endpoint.
-      const mock = [
+      const cached = readCachedResponse();
+      if (!cached?.run_id) {
+        setData([]);
+        return;
+      }
+      const wastePct = cached.kpis?.waste_reduction_pct ?? 0;
+      setData([
         {
-          runId: 'run_demo_001',
-          scenarioType: 'monsoon_disruption',
-          createdAt: '2026-04-20T09:12:00Z',
-          wasteReductionPct: 0.27,
+          runId: cached.run_id,
+          scenarioType: cached.scenario_type || 'monsoon_disruption',
+          createdAt: new Date().toISOString(),
+          // KPIGrid / dashboard treat this as a fraction (0–1); backend returns 0–100.
+          wasteReductionPct: wastePct / 100,
         },
-        {
-          runId: 'run_demo_002',
-          scenarioType: 'heat_wave',
-          createdAt: '2026-04-21T14:03:00Z',
-          wasteReductionPct: 0.21,
-        },
-      ];
-      setData(mock);
+      ]);
     } catch (err) {
       setError(formatApiError(err));
     } finally {
@@ -101,6 +115,17 @@ export function useRuns() {
   }, [fetchRuns]);
 
   return { data, loading, error, refetch: fetchRuns };
+}
+
+/** Read the cached POST /api/scenario/run response. */
+export function useCachedRunResponse() {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    setData(readCachedResponse());
+  }, []);
+
+  return data;
 }
 
 export default useRuns;

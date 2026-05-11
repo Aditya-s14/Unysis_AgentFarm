@@ -1,0 +1,11 @@
+id,name,lat,lng,type,base_demand_per_day
+dp-apmc-01,Yeshwanthpur APMC Yard,13.0280,77.5366,apmc,2000
+dp-apmc-02,Kolar Regional APMC,13.1362,78.1295,apmc,1400
+dp-apmc-03,Hubli APMC Main Gate,15.3647,75.1239,apmc,1800
+dp-apmc-04,Nashik Wholesale APMC,19.9975,73.7898,apmc,1900
+dp-apmc-05,Solapur Tomato Auction APMC,17.6599,75.9064,apmc,1500
+dp-apmc-06,Sangli Turmeric & Veg APMC,16.8524,74.5815,apmc,1300
+dp-priv-01,Reliance Fresh DC Pune Corridor,18.5018,73.8745,private,1200
+dp-priv-02,Metro Cash Nashik Ring Road,19.9403,73.8341,private,1000
+dp-priv-03,Star Bazaar Hubli Bypass,15.4021,75.0777,private,800
+dp-ret-01,Mantri Square Retail Cluster,12.9915,77.5696,retail,500
