@@ -1,159 +1,440 @@
-import { useEffect, useState } from 'react';
-
-const AGENT_ORDER = [
-  'orchestrator_entry',
-  'weather_agent',
-  'demand_agent',
-  'inventory_agent',
-  'logistics_agent',
-  'validator',
-  'orchestrator_exit',
-];
-
+import { useEffect, useMemo, useState } from 'react';
+import {
+  buildSimulationSteps,
+  formatViolationTypes,
+  hasRetryLoop,
+  validatorRetryCounterLabel,
+} from '@/utils/retryLoopTrace';
 const AGENT_LABELS = {
-  orchestrator_entry: 'Orchestrator — validating inputs',
-  weather_agent:      'Weather Agent — fetching forecasts',
-  demand_agent:       'Demand Agent — forecasting mandis',
-  inventory_agent:    'Inventory Agent — calculating spoilage',
-  logistics_agent:    'Logistics Agent — solving routes (OR-Tools)',
-  validator:          'Validator — checking plan feasibility',
-  orchestrator_exit:  'Orchestrator — packaging final plan',
+  orchestrator_entry: 'Orchestrator (init) — validating inputs',
+  weather_agent: 'Weather Agent — fetching forecasts',
+  demand_agent: 'Demand Agent — forecasting mandis',
+  inventory_agent: 'Inventory Agent — calculating spoilage',
+  logistics_agent: 'Logistics Agent — solving routes (OR-Tools)',
+  validator: 'Validator — checking plan feasibility',
+  orchestrator_exit: 'Orchestrator (finalise) — packaging final plan',
 };
 
 const AGENT_COLORS = {
   orchestrator_entry: '#F5A623',
-  weather_agent:      '#2196F3',
-  demand_agent:       '#FF9800',
-  inventory_agent:    '#4CAF50',
-  logistics_agent:    '#9C27B0',
-  validator:          '#8A9E8C',
-  orchestrator_exit:  '#F5A623',
+  weather_agent: '#2196F3',
+  demand_agent: '#FF9800',
+  inventory_agent: '#4CAF50',
+  logistics_agent: '#9C27B0',
+  validator: '#8A9E8C',
+  orchestrator_exit: '#F5A623',
+  retry_banner: '#E53935',
 };
 
+const PIPELINE_COMPLETE_MSG =
+  'Pipeline completed — 6 agents (Weather, Demand, Inventory, Logistics, Validator, Orchestrator)';
+
+const LOGICAL_AGENT_COUNT = 6;
+
+function labelForStep(step) {
+  if (step.kind === 'retry_banner') {
+    const factor = step.relaxation != null ? ` ×${step.relaxation}` : '';
+    return `Retry prep — relaxing constraints${factor}`;
+  }
+  if (step.key === 'logistics_agent' && step.isRetry) {
+    return `Logistics Agent — re-solving routes (attempt ${step.attempt})`;
+  }
+  if (step.key === 'validator' && step.details) {
+    const n = validatorRetryCounterLabel(step.details);
+    if (step.details.retry_triggered) {
+      return `Validator — failed (${n || 'retry'})`;
+    }
+    if (step.details.max_retries_reached) {
+      return 'Validator — max retries reached';
+    }
+  }
+  return AGENT_LABELS[step.key] || step.key;
+}
+
+function colorForStep(step) {
+  if (step.kind === 'retry_banner') return AGENT_COLORS.retry_banner;
+  return AGENT_COLORS[step.key] || 'var(--accent)';
+}
+
+function splitSteps(steps) {
+  const firstLogistics = steps.findIndex((s) => s.key === 'logistics_agent');
+  const exitIdx = steps.findIndex((s) => s.key === 'orchestrator_exit');
+  if (firstLogistics < 0) {
+    return { prefix: steps, loop: [], suffix: [] };
+  }
+  const prefix = steps.slice(0, firstLogistics);
+  const loopEnd = exitIdx >= 0 ? exitIdx : steps.length;
+  const loop = steps.slice(firstLogistics, loopEnd);
+  const suffix = exitIdx >= 0 ? steps.slice(exitIdx) : [];
+  return { prefix, loop, suffix };
+}
+
+function PipelineConnector() {
+  return (
+    <div
+      className="font-mono text-muted flex justify-center py-0.5"
+      style={{ fontSize: '14px', letterSpacing: '0.05em', opacity: 0.55 }}
+      aria-hidden
+    >
+      ↓
+    </div>
+  );
+}
+
+function SectionLabel({ icon, title, subtitle }) {
+  return (
+    <div
+      className="flex items-baseline gap-2 px-1 pt-1 pb-2"
+      style={{ borderBottom: '1px solid var(--border)' }}
+    >
+      <span style={{ fontSize: '13px', lineHeight: 1 }}>{icon}</span>
+      <div>
+        <p
+          className="font-mono uppercase"
+          style={{ fontSize: '9px', letterSpacing: '0.16em', color: 'var(--accent)' }}
+        >
+          {title}
+        </p>
+        {subtitle && (
+          <p className="font-mono text-muted" style={{ fontSize: '10px', marginTop: '2px' }}>
+            {subtitle}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
- * SimulationPanel — animates agent execution rows as the pipeline runs.
- *
- * Props:
- *   traces    AgentTrace[]  Final traces from the backend.  Pass [] while API is pending.
- *   isRunning bool          True while the API call is in flight or the animation is playing.
- *   onComplete fn           Called once the last agent row transitions to DONE.
+ * SimulationPanel — animates pipeline steps; expands when validator retries occur.
  */
-export default function SimulationPanel({ traces = [], isRunning = false, onComplete }) {
-  // -1 = not started, 0..6 = agent currently animating, 7 = all done
+export default function SimulationPanel({
+  traces = [],
+  isRunning = false,
+  scenarioType = 'monsoon_disruption',
+  onComplete,
+}) {
+  const steps = useMemo(() => buildSimulationSteps(traces), [traces]);
+  const { prefix, loop, suffix } = useMemo(() => splitSteps(steps), [steps]);
+  const showRetry = hasRetryLoop(traces);
   const [animStep, setAnimStep] = useState(-1);
 
-  // Kick off animation when traces arrive
   useEffect(() => {
-    if (!traces || traces.length === 0) return;
+    if (!steps.length) return;
     setAnimStep(0);
-  }, [traces]);
+  }, [steps]);
 
-  // Advance one step every 600 ms
   useEffect(() => {
-    if (animStep < 0 || animStep >= AGENT_ORDER.length) {
-      if (animStep >= AGENT_ORDER.length) onComplete?.();
+    if (animStep < 0 || animStep >= steps.length) {
+      if (animStep >= steps.length) onComplete?.();
       return;
     }
-    const t = setTimeout(() => setAnimStep((s) => s + 1), 600);
+    const delay = steps[animStep]?.kind === 'retry_banner' ? 900 : 600;
+    const t = setTimeout(() => setAnimStep((s) => s + 1), delay);
     return () => clearTimeout(t);
-  }, [animStep, onComplete]);
+  }, [animStep, steps, onComplete]);
 
-  // Build agent_name → trace lookup
-  const traceByAgent = {};
-  (traces || []).forEach((tr) => {
-    const k = tr.agent_name || tr.agent || '';
-    if (k) traceByAgent[k] = tr;
-  });
+  const stepsRemaining = animStep < 0 ? steps.length : Math.max(0, steps.length - animStep);
+  const allDone = animStep >= steps.length;
 
-  const remaining = animStep < 0 ? AGENT_ORDER.length : Math.max(0, AGENT_ORDER.length - animStep);
-  const allDone   = animStep >= AGENT_ORDER.length;
+  const headerSubline = allDone
+    ? showRetry
+      ? 'Adaptive retry loop completed — validator re-ran with relaxed constraints'
+      : '5 core agents + orchestrator · all steps complete'
+    : animStep < 0
+      ? 'Pipeline: 6 agents executing (5 core + orchestrator)'
+      : `${stepsRemaining} pipeline step${stepsRemaining === 1 ? '' : 's'} remaining`;
+
+  const renderStep = (step, globalIndex) => {
+    const state = animStep > globalIndex ? 'DONE' : animStep === globalIndex ? 'RUNNING' : 'PENDING';
+    if (step.kind === 'retry_banner') {
+      return (
+        <RetryBannerRow
+          key={step.id}
+          state={state}
+          retryCount={step.retryCount}
+          relaxation={step.relaxation}
+          demandScale={step.demandScale}
+          reasons={step.reasons}
+        />
+      );
+    }
+    const trace = step.trace;
+    let durationMs = null;
+    if (trace?.start_time && trace?.end_time) {
+      const s = Date.parse(trace.start_time);
+      const e = Date.parse(trace.end_time);
+      if (!Number.isNaN(s) && !Number.isNaN(e)) durationMs = Math.max(0, e - s);
+    }
+    const extraNotes = step.key === 'validator' && step.details?.retry_triggered
+      ? 'Validation failed — routing again with relaxed constraints'
+      : step.key === 'validator' && step.details?.max_retries_reached
+        ? 'Plan requires human review'
+        : '';
+
+    return (
+      <AgentRow
+        key={step.id}
+        color={colorForStep(step)}
+        label={labelForStep(step)}
+        state={state}
+        notes={extraNotes || trace?.notes || ''}
+        tokenCount={trace?.token_count ?? null}
+        durationMs={durationMs}
+        highlight={step.key === 'validator' && step.details?.retry_triggered}
+        failHighlight={step.key === 'validator' && step.details?.max_retries_reached}
+      />
+    );
+  };
+
+  let globalIdx = 0;
 
   return (
     <div
       className="bg-card"
       style={{ border: '1px solid var(--border)', borderRadius: '4px', overflow: 'hidden' }}
     >
-      {/* ── Header ── */}
       <div
         className="px-5 py-4 flex items-center gap-3"
         style={{ borderBottom: '1px solid var(--border)' }}
       >
-        <span style={{ fontSize: '22px', lineHeight: 1 }}>🤖</span>
-        <div>
+        <span className="font-mono text-accent" style={{ fontSize: '11px', letterSpacing: '0.12em' }}>AI</span>
+        <div className="flex-1 min-w-0">
           <h2
             className="font-syne font-bold uppercase tracking-wider-2"
             style={{ fontSize: '14px', color: 'var(--accent)' }}
           >
-            AGENTS RUNNING — MONSOON DISRUPTION
+            {scenarioType.replace(/_/g, ' ').toUpperCase()} — PIPELINE
           </h2>
           <p className="font-mono mt-1" style={{ fontSize: '11px', color: 'var(--muted)' }}>
-            {allDone
-              ? 'all agents complete ✓'
-              : animStep < 0
-              ? '7 autonomous agents optimising supply chain...'
-              : `${remaining} agent${remaining === 1 ? '' : 's'} remaining...`}
+            {headerSubline}
           </p>
         </div>
+        <span
+          className="font-mono uppercase shrink-0 hidden sm:inline"
+          style={{
+            fontSize: '9px',
+            letterSpacing: '0.12em',
+            color: 'var(--accent)',
+            border: '1px solid rgba(245, 166, 35, 0.4)',
+            borderRadius: '2px',
+            padding: '4px 8px',
+          }}
+        >
+          {LOGICAL_AGENT_COUNT} agents
+        </span>
       </div>
 
-      {/* ── Agent rows ── */}
-      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {AGENT_ORDER.map((key, idx) => {
-          const rowState =
-            animStep > idx ? 'DONE' : animStep === idx ? 'RUNNING' : 'PENDING';
-          const trace   = traceByAgent[key];
-          const color   = AGENT_COLORS[key];
-          const label   = AGENT_LABELS[key];
+      {allDone && showRetry && (
+        <div
+          className="px-5 py-3 font-mono"
+          style={{
+            fontSize: '11.5px',
+            lineHeight: 1.55,
+            color: 'var(--red-risk)',
+            background: 'rgba(229, 57, 53, 0.06)',
+            borderBottom: '1px solid var(--border)',
+          }}
+        >
+          Validator retry loop observed — constraints were relaxed and logistics re-ran.
+        </div>
+      )}
 
-          let durationMs = null;
-          if (trace?.start_time && trace?.end_time) {
-            const s = Date.parse(trace.start_time);
-            const e = Date.parse(trace.end_time);
-            if (!isNaN(s) && !isNaN(e)) durationMs = Math.max(0, e - s);
+      {allDone && !showRetry && (
+        <div
+          className="px-5 py-3 font-mono"
+          style={{
+            fontSize: '11.5px',
+            lineHeight: 1.55,
+            color: 'var(--green-ok)',
+            background: 'rgba(76, 175, 80, 0.08)',
+            borderBottom: '1px solid var(--border)',
+          }}
+        >
+          OK — {PIPELINE_COMPLETE_MSG}
+        </div>
+      )}
+
+      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <SectionLabel icon="*" title="Orchestrator" subtitle="control layer · init" />
+        <OrchestratorGroup>
+          {prefix
+            .filter((s) => s.key === 'orchestrator_entry')
+            .map((step) => {
+              const el = renderStep(step, globalIdx);
+              globalIdx += 1;
+              return el;
+            })}
+        </OrchestratorGroup>
+
+        <PipelineConnector />
+
+        <SectionLabel
+          icon=">"
+          title="Core pipeline"
+          subtitle={
+            showRetry
+              ? 'weather → demand → inventory → logistics ↔ validator (adaptive retry)'
+              : '5 agents — weather → demand → inventory → logistics → validator'
           }
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {prefix
+            .filter((s) => s.key !== 'orchestrator_entry')
+            .map((step) => {
+              const el = renderStep(step, globalIdx);
+              globalIdx += 1;
+              return el;
+            })}
+          {loop.length > 0 && (
+            <div
+              style={{
+                border: showRetry ? '1px dashed rgba(229, 57, 53, 0.35)' : 'none',
+                borderRadius: '4px',
+                padding: showRetry ? '8px' : 0,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
+              {showRetry && (
+                <p
+                  className="font-mono uppercase m-0 px-1"
+                  style={{ fontSize: '9px', letterSpacing: '0.14em', color: 'var(--red-risk)' }}
+                >
+                  Routing & validation loop
+                </p>
+              )}
+              {loop.map((step) => {
+                const el = renderStep(step, globalIdx);
+                globalIdx += 1;
+                return el;
+              })}
+            </div>
+          )}
+        </div>
 
-          return (
-            <AgentRow
-              key={key}
-              color={color}
-              label={label}
-              state={rowState}
-              notes={trace?.notes || ''}
-              tokenCount={trace?.token_count ?? null}
-              durationMs={durationMs}
-            />
-          );
-        })}
+        {suffix.length > 0 && (
+          <>
+            <PipelineConnector />
+            <SectionLabel icon="*" title="Orchestrator" subtitle="control layer · finalise" />
+            <OrchestratorGroup>
+              {suffix.map((step) => {
+                const el = renderStep(step, globalIdx);
+                globalIdx += 1;
+                return el;
+              })}
+            </OrchestratorGroup>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-/* ── Single agent row ─────────────────────────────────────────────────────── */
-function AgentRow({ color, label, state, notes, tokenCount, durationMs }) {
+function OrchestratorGroup({ children }) {
+  return (
+    <div
+      style={{
+        border: '1px solid rgba(245, 166, 35, 0.25)',
+        borderLeft: '3px solid var(--accent)',
+        borderRadius: '4px',
+        background: 'rgba(245, 166, 35, 0.04)',
+        padding: '4px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function RetryBannerRow({ state, retryCount, relaxation, demandScale, reasons }) {
   const isPending = state === 'PENDING';
   const isRunning = state === 'RUNNING';
-  const isDone    = state === 'DONE';
+  const isDone = state === 'DONE';
+  const color = AGENT_COLORS.retry_banner;
 
   return (
     <div
       style={{
         borderLeft: `3px solid ${isPending ? 'var(--border)' : color}`,
-        padding: '12px 16px',
-        background: 'var(--bg-card)',
+        padding: '10px 14px',
+        background: 'rgba(229, 57, 53, 0.05)',
         borderRadius: '0 2px 2px 0',
+        opacity: isPending ? 0.5 : 1,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <StatusDot color={color} state={state} />
+        <span className="font-syne font-bold uppercase" style={{ fontSize: '12px', color: 'var(--red-risk)' }}>
+          Validation failed — retrying logistics
+        </span>
+        {retryCount != null && (
+          <span className="font-mono text-muted" style={{ fontSize: '10px' }}>
+            Retry {retryCount}/2
+          </span>
+        )}
+      </div>
+      {isRunning && (
+        <p className="font-mono mt-2 m-0" style={{ fontSize: '11px', color }}>
+          Applying relaxed constraints…
+        </p>
+      )}
+      {isDone && (
+        <p className="font-mono mt-2 m-0 text-muted" style={{ fontSize: '10.5px', lineHeight: 1.5 }}>
+          {formatViolationTypes(reasons)}
+          {relaxation != null && ` · relaxation ×${relaxation}`}
+          {demandScale != null && ` · demand scale ${demandScale}`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AgentRow({
+  color,
+  label,
+  state,
+  notes,
+  tokenCount,
+  durationMs,
+  nested = false,
+  highlight = false,
+  failHighlight = false,
+}) {
+  const isPending = state === 'PENDING';
+  const isRunning = state === 'RUNNING';
+  const isDone = state === 'DONE';
+
+  let borderColor = isPending ? 'var(--border)' : color;
+  if (highlight) borderColor = 'var(--red-risk)';
+  if (failHighlight) borderColor = '#FF9800';
+
+  return (
+    <div
+      style={{
+        borderLeft: nested ? 'none' : `3px solid ${borderColor}`,
+        padding: nested ? '10px 12px' : '12px 16px',
+        background: highlight
+          ? 'rgba(229, 57, 53, 0.04)'
+          : nested
+            ? 'transparent'
+            : 'var(--bg-card)',
+        borderRadius: nested ? '2px' : '0 2px 2px 0',
         transition: 'all 0.3s ease',
         opacity: isPending ? 0.45 : 1,
       }}
     >
-      {/* Row header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
           <StatusDot color={color} state={state} />
           <span
             className="font-syne font-bold uppercase tracking-wider"
             style={{
-              fontSize: '13px',
+              fontSize: nested ? '12px' : '13px',
               color: isPending ? 'var(--muted)' : 'var(--text)',
             }}
           >
@@ -161,10 +442,16 @@ function AgentRow({ color, label, state, notes, tokenCount, durationMs }) {
           </span>
         </div>
 
-        {/* Right-side metadata */}
         <div
           className="font-mono"
-          style={{ fontSize: '11px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}
+          style={{
+            fontSize: '11px',
+            color: 'var(--muted)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flexShrink: 0,
+          }}
         >
           {isDone && durationMs != null && (
             <span>{durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`}</span>
@@ -172,28 +459,24 @@ function AgentRow({ color, label, state, notes, tokenCount, durationMs }) {
           {isDone && tokenCount != null && tokenCount > 0 && (
             <span>{tokenCount} tok</span>
           )}
-          {isDone    && <span style={{ color: '#4CAF50', fontWeight: 700 }}>✓</span>}
+          {isDone && <span style={{ color: failHighlight ? '#FF9800' : '#4CAF50', fontWeight: 700 }}>{failHighlight ? '!' : '✓'}</span>}
           {isRunning && <span style={{ color }}>●</span>}
           {isPending && <span style={{ opacity: 0.4 }}>○</span>}
         </div>
       </div>
 
-      {/* Sub-text */}
       {isDone && notes && (
-        <p
-          className="font-mono mt-2"
-          style={{ fontSize: '11.5px', color: 'var(--muted)', lineHeight: 1.55 }}
-        >
-          {notes.length > 110 ? notes.slice(0, 110) + '…' : notes}
+        <p className="font-mono mt-2 m-0" style={{ fontSize: '11.5px', color: 'var(--muted)', lineHeight: 1.55 }}>
+          {notes.length > 140 ? `${notes.slice(0, 140)}…` : notes}
         </p>
       )}
       {isRunning && (
-        <p className="font-mono mt-1" style={{ fontSize: '11px', color }}>
+        <p className="font-mono mt-1 m-0" style={{ fontSize: '11px', color }}>
           running...
         </p>
       )}
       {isPending && (
-        <p className="font-mono mt-1" style={{ fontSize: '11px', color: 'var(--muted)' }}>
+        <p className="font-mono mt-1 m-0" style={{ fontSize: '11px', color: 'var(--muted)' }}>
           waiting...
         </p>
       )}
@@ -201,7 +484,6 @@ function AgentRow({ color, label, state, notes, tokenCount, durationMs }) {
   );
 }
 
-/* ── Status dot (pure CSS animation handled by globals.css keyframe) ───────── */
 function StatusDot({ color, state }) {
   const base = {
     width: '10px',
@@ -212,7 +494,12 @@ function StatusDot({ color, state }) {
     transition: 'background 0.3s ease',
   };
   if (state === 'PENDING') return <span style={{ ...base, background: 'var(--border)' }} />;
-  if (state === 'RUNNING')
-    return <span style={{ ...base, background: color, animation: 'agent-pulse 1s ease-in-out infinite' }} />;
+  if (state === 'RUNNING') {
+    return (
+      <span
+        style={{ ...base, background: color, animation: 'agent-pulse 1s ease-in-out infinite' }}
+      />
+    );
+  }
   return <span style={{ ...base, background: color }} />;
 }

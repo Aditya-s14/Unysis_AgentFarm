@@ -4,7 +4,7 @@ Entry point:
     response = await answer_query(run_id, session_id, question)
 
 Memory tiers used:
-  Tier 2 (Postgres): load Plan by run_id for context.
+  Tier 2 (Postgres): load Plan + RunLog by run_id for rich context.
   Tier 3 (Redis session buffer): load conversation history, push new turns.
 
 One LLM call per query (OpenAI / OpenRouter, temp=0.3).
@@ -14,9 +14,11 @@ Falls back to a canned message if LLM is unavailable.
 
 from __future__ import annotations
 
-import json
 import logging
+import re
+from collections import defaultdict
 from datetime import datetime, timezone
+from typing import Any
 
 from config import get_settings
 from memory.session_buffer import get_history, push_message
@@ -24,102 +26,410 @@ from models.schemas import AdvisorResponse
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = """\
-You are Kisan Mitra (Farmer's Friend), an agricultural logistics advisor for Indian farmers.
-Speak in simple, warm, plain language — no jargon, no bullet lists unless asked.
-You have access to the current optimized dispatch plan for this farm cluster.
-Answer in 2–4 sentences. Be specific and actionable.
-If you don't have enough information, say so honestly and suggest what to do next.\
-"""
-
-# Shown when the LLM call itself throws (network/auth error mid-request).
 _FALLBACK_REPLY = (
     "I'm having trouble connecting right now. "
     "Please try again in a moment, or contact your field supervisor directly."
 )
 
-# Shown during the demo when no API key is configured — always gives useful context.
-_DEMO_REPLY = (
-    "Based on the current plan: Farm Nandi Valley has tomatoes with 72h until spoilage "
-    "— highest priority for dispatch. Truck tr-004 is assigned. "
-    "Recommend harvesting before 6AM tomorrow."
-)
+# ── Data loading helpers ───────────────────────────────────────────────────────
 
 
-def _plan_summary(plan_row: object | None) -> str:
-    """Convert a PlanTable row to a concise text summary for the LLM context."""
-    if plan_row is None:
-        return "No plan available for this run."
-
-    rp = getattr(plan_row, "route_plan_json", {}) or {}
-    routes = rp.get("routes", [])
-    val = getattr(plan_row, "validation_json", {}) or {}
-    valid = val.get("valid", True)
-    n_routes = len(routes)
-    total_stops = sum(len(r.get("stops", [])) for r in routes)
-    plan_date = getattr(plan_row, "created_at", None)
-    date_str = plan_date.strftime("%d %b %Y") if plan_date else "unknown date"
-
-    return (
-        f"Plan created {date_str}. "
-        f"{n_routes} truck route(s) covering {total_stops} pickup/delivery stops. "
-        f"Feasibility check: {'passed' if valid else 'FAILED — human review needed'}."
-    )
-
-
-async def _load_plan(run_id: str) -> object | None:
-    """Load PlanTable row by run_id from Postgres. Returns None gracefully."""
+async def _load_plan_row(run_id: str) -> object | None:
+    """Return PlanTable row for run_id, or None on any failure."""
     try:
-        from tools.db import get_session_maker
-        from models.db_models import PlanTable
+        from tools.db import get_plan_by_run_id
+
+        return await get_plan_by_run_id(run_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("advisor: plan load failed run_id=%s: %s", run_id, exc)
+        return None
+
+
+async def _load_run_detail(run_id: str) -> dict[str, Any]:
+    """Return plan_run_complete detail_json for run_id (KPIs + plan snapshot), or {}."""
+    try:
+        from tools.db import list_run_logs_for_run
+
+        logs = await list_run_logs_for_run(run_id)
+        for log in reversed(logs):
+            if log.message == "plan_run_complete" and log.detail_json:
+                return dict(log.detail_json)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("advisor: run detail load failed run_id=%s: %s", run_id, exc)
+    return {}
+
+
+async def _load_name_maps() -> tuple[dict[str, str], dict[str, tuple[str, float]]]:
+    """Return (farm_id → name, dp_id → (name, base_demand_per_day)) from DB."""
+    farm_names: dict[str, str] = {}
+    dp_info: dict[str, tuple[str, float]] = {}
+    try:
         from sqlalchemy import select
 
+        from models.db_models import DemandPointRow, FarmRow
+        from tools.db import get_session_maker
+
         async with get_session_maker()() as session:
-            q = await session.execute(
-                select(PlanTable).where(PlanTable.run_id == run_id)
-            )
-            return q.scalar_one_or_none()
+            for row in await session.scalars(select(FarmRow)):
+                farm_names[row.id] = row.name
+            for row in await session.scalars(select(DemandPointRow)):
+                dp_info[row.id] = (row.name, row.base_demand_per_day)
     except Exception as exc:  # noqa: BLE001
-        logger.debug("advisor: plan load failed for run_id=%s: %s", run_id, exc)
+        logger.debug("advisor: name maps load failed: %s", exc)
+    return farm_names, dp_info
+
+
+# ── Plan analytics ─────────────────────────────────────────────────────────────
+
+
+def _compute_incoming_by_mandi(
+    routes: list[dict],
+    at_risk_lookup: dict[str, float],
+) -> dict[str, float]:
+    """Sum incoming kg per mandi from route stops (mirrors dashboard mandi logic)."""
+    incoming: dict[str, float] = defaultdict(float)
+    for route in routes:
+        stops = route.get("stops") or []
+        farm_stops = [s for s in stops if not s.get("demand_point_id") and s.get("label")]
+        dp_stops = [s for s in stops if s.get("demand_point_id")]
+
+        farm_load_stops = sum(
+            float(s["load_kg"]) for s in farm_stops
+            if s.get("load_kg") is not None and float(s["load_kg"]) > 0
+        )
+        farm_load_risk = sum(at_risk_lookup.get(s.get("label") or "", 0.0) for s in farm_stops)
+        route_farm_load = farm_load_stops if farm_load_stops > 0 else farm_load_risk
+
+        n_dp = len(dp_stops)
+        for stop in dp_stops:
+            dp_id = stop.get("demand_point_id")
+            if not dp_id:
+                continue
+            if stop.get("load_kg") is not None and float(stop["load_kg"]) > 0:
+                load_kg = float(stop["load_kg"])
+            elif n_dp > 0:
+                load_kg = route_farm_load / n_dp
+            else:
+                load_kg = 0.0
+            incoming[dp_id] += load_kg
+    return dict(incoming)
+
+
+def _expected_demand_kg(
+    dp_id: str,
+    dp_info: dict[str, tuple[str, float]],
+    demand_forecast: dict[str, list[float]],
+) -> float:
+    series = demand_forecast.get(dp_id)
+    if isinstance(series, list) and series:
+        return float(series[0])
+    info = dp_info.get(dp_id)
+    return float(info[1]) if info else 0.0
+
+
+def _build_mandi_rows(
+    dp_info: dict[str, tuple[str, float]],
+    routes: list[dict],
+    at_risk_stock: list[dict],
+    demand_forecast: dict[str, list[float]],
+) -> list[dict[str, Any]]:
+    at_risk_lookup = {
+        s.get("farm_id"): float(s.get("kg_at_risk") or 0)
+        for s in at_risk_stock
+        if s.get("farm_id")
+    }
+    incoming_map = _compute_incoming_by_mandi(routes, at_risk_lookup)
+
+    rows: list[dict[str, Any]] = []
+    for dp_id, (name, _base) in dp_info.items():
+        expected = _expected_demand_kg(dp_id, dp_info, demand_forecast)
+        incoming = round(incoming_map.get(dp_id, 0.0), 1)
+        total_available = incoming
+        net_balance = total_available - expected
+        fulfilment_pct = (
+            min(200.0, max(0.0, (total_available / expected) * 100.0)) if expected > 0 else 0.0
+        )
+        shortage_kg = max(0.0, -net_balance)
+        if fulfilment_pct < 50:
+            status = "CRITICAL SHORTAGE"
+        elif fulfilment_pct < 80:
+            status = "SHORTAGE"
+        elif fulfilment_pct < 100:
+            status = "NEARLY MET"
+        else:
+            status = "SUPPLY MET"
+        rows.append({
+            "id": dp_id,
+            "name": name,
+            "expected_demand_kg": round(expected, 1),
+            "incoming_supply_kg": incoming,
+            "shortage_kg": round(shortage_kg, 1),
+            "fulfilment_pct": round(fulfilment_pct, 1),
+            "status": status,
+        })
+    rows.sort(key=lambda r: r["shortage_kg"], reverse=True)
+    return rows
+
+
+def _build_farm_lines(
+    at_risk_stock: list[dict],
+    farm_names: dict[str, str],
+    routes: list[dict],
+) -> list[str]:
+    """Farm lines with spoilage windows; include routed farms even if not in at_risk."""
+    seen: set[str] = set()
+    lines: list[str] = []
+
+    for stock in sorted(
+        at_risk_stock,
+        key=lambda s: s.get("hours_until_spoilage")
+        if s.get("hours_until_spoilage") is not None
+        else 9999.0,
+    ):
+        fid = stock.get("farm_id")
+        if not fid or fid in seen:
+            continue
+        seen.add(fid)
+        name = farm_names.get(fid, fid)
+        hours = stock.get("hours_until_spoilage")
+        kg = stock.get("kg_at_risk")
+        spoil = f"{round(hours)}h spoilage window" if hours is not None else "spoilage window n/a"
+        kg_str = f", {round(kg)} kg at risk" if kg is not None else ""
+        lines.append(f"{name} ({fid}): {spoil}{kg_str}")
+
+    for route in routes:
+        for stop in route.get("stops") or []:
+            if stop.get("demand_point_id"):
+                continue
+            fid = stop.get("label")
+            if not fid or fid in seen:
+                continue
+            seen.add(fid)
+            name = farm_names.get(fid, fid)
+            lines.append(f"{name} ({fid}): on route (spoilage data not in this run)")
+
+    return lines
+
+
+def _build_route_summary_lines(
+    routes: list[dict],
+    farm_names: dict[str, str],
+    dp_info: dict[str, tuple[str, float]],
+) -> list[str]:
+    lines: list[str] = []
+    for route in routes:
+        truck_id = route.get("truck_id", "?")
+        stops = sorted(route.get("stops") or [], key=lambda s: s.get("sequence", 0))
+        destinations: list[str] = []
+        for stop in stops:
+            dp_id = stop.get("demand_point_id")
+            if dp_id:
+                info = dp_info.get(dp_id)
+                destinations.append(info[0] if info else dp_id)
+            else:
+                fid = stop.get("label")
+                if fid:
+                    destinations.append(farm_names.get(fid, fid))
+        dest_str = " → ".join(destinations) if destinations else "no stops"
+        dist = route.get("distance_km")
+        dist_str = f", {max(0, float(dist)):.0f} km" if dist is not None else ""
+        lines.append(f"{truck_id} → {dest_str}{dist_str}")
+    return lines
+
+
+def _format_weather_line(weather_summary: dict, weather_risk: dict[str, str]) -> str:
+    if not weather_summary and not weather_risk:
+        return "Not recorded for this run."
+    parts: list[str] = []
+    if weather_summary:
+        cond = weather_summary.get("condition") or weather_summary.get("scenario_type")
+        temp = weather_summary.get("temperature_c")
+        rain = weather_summary.get("rainfall_mm")
+        risk = weather_summary.get("risk_level")
+        if cond:
+            parts.append(str(cond))
+        if temp is not None:
+            parts.append(f"{temp}°C")
+        if rain is not None:
+            parts.append(f"rain {rain} mm")
+        if risk:
+            parts.append(f"risk {risk}")
+        affected = weather_summary.get("affected_farms") or []
+        if affected:
+            parts.append(f"affected farms: {', '.join(affected[:5])}")
+        advisory = weather_summary.get("transport_advisory")
+        if advisory:
+            parts.append(f"transport: {advisory}")
+    severe = [k for k, v in weather_risk.items() if v in ("severe", "warning")]
+    if severe and not parts:
+        parts.append(f"{len(severe)} farms with elevated weather risk")
+    return "; ".join(parts) if parts else "Weather data present (see run logs)."
+
+
+def _build_system_prompt(
+    run_id: str,
+    farm_list: str,
+    mandi_list: str,
+    route_summary: str,
+    waste_reduction_pct: float | None,
+    weather_line: str,
+    validation_line: str,
+) -> str:
+    waste_str = (
+        f"{waste_reduction_pct:.1f}%"
+        if waste_reduction_pct is not None
+        else "not available for this run"
+    )
+    return f"""You are Kisan Mitra, advisor for AgentFarm Optimizer.
+Speak in simple, warm, plain language — 2–4 sentences unless the user asks for a list.
+Be specific and actionable using ONLY the current plan data below.
+
+Current plan (run_id: {run_id}):
+Farms: {farm_list}
+Mandis: {mandi_list}
+Routes: {route_summary}
+Weather risk: {weather_line}
+Validation: {validation_line}
+Waste reduction: {waste_str}
+
+Rules:
+- Always answer using the data above. Quote mandi/farm names and numbers from the plan.
+- Never say "I don't have the specific requirements" or "I don't have specific information" when the answer is in the data above.
+- If exact information is missing, say "This run does not contain X, but based on available data …" and use what you do have.
+- For shortage questions, compare Mandis by shortage_kg and fulfilment_pct from the list above."""
+
+
+# ── Context assembly ──────────────────────────────────────────────────────────
+
+
+def _assemble_plan_context(
+    run_id: str,
+    plan_row: object | None,
+    run_detail: dict[str, Any],
+    farm_names: dict[str, str],
+    dp_info: dict[str, tuple[str, float]],
+) -> dict[str, Any]:
+    rp: dict = {}
+    val: dict = {}
+    if plan_row is not None:
+        rp = getattr(plan_row, "route_plan_json", {}) or {}
+        val = getattr(plan_row, "validation_json", {}) or {}
+
+    routes = rp.get("routes") or []
+    at_risk_stock = run_detail.get("at_risk_stock") or []
+    if not isinstance(at_risk_stock, list):
+        at_risk_stock = []
+    demand_forecast = run_detail.get("demand_forecast") or {}
+    if not isinstance(demand_forecast, dict):
+        demand_forecast = {}
+    weather_summary = run_detail.get("weather_summary") or {}
+    weather_risk = run_detail.get("weather_risk_summary") or {}
+
+    farm_lines = _build_farm_lines(at_risk_stock, farm_names, routes)
+    mandi_rows = _build_mandi_rows(dp_info, routes, at_risk_stock, demand_forecast)
+    route_lines = _build_route_summary_lines(routes, farm_names, dp_info)
+
+    mandi_lines = [
+        (
+            f"{m['name']}: expected {m['expected_demand_kg']:.0f} kg/day, "
+            f"incoming {m['incoming_supply_kg']:.0f} kg, "
+            f"shortage {m['shortage_kg']:.0f} kg ({m['fulfilment_pct']:.0f}% fulfilment, {m['status']})"
+        )
+        for m in mandi_rows
+    ]
+
+    waste_reduction = run_detail.get("waste_reduction_pct")
+    if waste_reduction is not None:
+        try:
+            waste_reduction = float(waste_reduction)
+        except (TypeError, ValueError):
+            waste_reduction = None
+
+    valid = val.get("valid", True)
+    errors = val.get("errors") or []
+    validation_line = (
+        "passed"
+        if valid
+        else f"failed — {'; '.join(str(e) for e in errors[:3])}"
+    )
+
+    farm_list = "; ".join(farm_lines) if farm_lines else "none listed"
+    mandi_list = "; ".join(mandi_lines) if mandi_lines else "none listed"
+    route_summary = "; ".join(route_lines) if route_lines else "no routes in plan"
+    weather_line = _format_weather_line(weather_summary, weather_risk)
+
+    system_prompt = _build_system_prompt(
+        run_id=run_id,
+        farm_list=farm_list,
+        mandi_list=mandi_list,
+        route_summary=route_summary,
+        waste_reduction_pct=waste_reduction,
+        weather_line=weather_line,
+        validation_line=validation_line,
+    )
+
+    return {
+        "system_prompt": system_prompt,
+        "mandi_rows": mandi_rows,
+        "farm_lines": farm_lines,
+        "route_lines": route_lines,
+        "waste_reduction_pct": waste_reduction,
+    }
+
+
+def _try_rule_based_answer(question: str, ctx: dict[str, Any]) -> str | None:
+    """Answer common questions from structured context when LLM is unavailable."""
+    q = question.lower()
+    mandi_rows: list[dict] = ctx.get("mandi_rows") or []
+    if not mandi_rows:
         return None
+
+    if re.search(r"\b(shortage|shortages|deficit|under.?suppl)\b", q) and re.search(
+        r"\b(mandi|market|apmc|which|biggest|largest|most)\b",
+        q,
+    ):
+        worst = mandi_rows[0]
+        runners = mandi_rows[1:3]
+        msg = (
+            f"Based on the current plan (run {ctx.get('run_id', '')[:8]}…), "
+            f"{worst['name']} has the biggest shortage — about {worst['shortage_kg']:.0f} kg short "
+            f"({worst['fulfilment_pct']:.0f}% fulfilment, {worst['status']}). "
+            f"Expected demand is {worst['expected_demand_kg']:.0f} kg/day with "
+            f"{worst['incoming_supply_kg']:.0f} kg incoming on assigned trucks."
+        )
+        if runners and runners[0]["shortage_kg"] > 0:
+            msg += (
+                f" Next highest: {runners[0]['name']} "
+                f"({runners[0]['shortage_kg']:.0f} kg short)."
+            )
+        return msg
+
+    return None
+
+
+# ── LLM call ──────────────────────────────────────────────────────────────────
 
 
 async def _llm_answer(
     question: str,
-    plan_summary: str,
+    system_prompt: str,
     history: list[dict],
-    run_id: str,
 ) -> tuple[str, int | None]:
     """Call OpenAI / OpenRouter (temp=0.3) and return (reply, token_count)."""
     settings = get_settings()
     api_key = (settings.OPENAI_API_KEY or "").strip()
     if not api_key:
-        logger.warning(
-            "advisor: OPENAI_API_KEY missing/empty — returning demo static answer. "
-            "Set OPENAI_API_KEY in .env to enable live LLM responses. "
-            "OPENAI_BASE_URL=%s",
-            settings.OPENAI_BASE_URL,
-        )
-        return _DEMO_REPLY, None
+        return "", None
 
     try:
         import openai
 
-        messages = [{"role": "system", "content": _SYSTEM_PROMPT}]
-
-        # Inject plan context as a system-level assistant turn
-        messages.append({
-            "role": "assistant",
-            "content": f"[Context — current plan for run {run_id}]\n{plan_summary}",
-        })
-
-        # Inject conversation history (Tier-3 memory, last 10 messages)
+        messages: list[dict] = [{"role": "system", "content": system_prompt}]
         for turn in history:
             role = turn.get("role", "user")
             content = turn.get("content", "")
             if role in ("user", "assistant") and content:
                 messages.append({"role": role, "content": content})
-
         messages.append({"role": "user", "content": question})
 
         client = openai.AsyncOpenAI(api_key=api_key, base_url=settings.OPENAI_BASE_URL)
@@ -135,10 +445,14 @@ async def _llm_answer(
     except Exception as exc:  # noqa: BLE001
         logger.error(
             "advisor LLM call failed (base_url=%s, model=gpt-4o-mini): %r",
-            settings.OPENAI_BASE_URL, exc,
+            settings.OPENAI_BASE_URL,
+            exc,
             exc_info=True,
         )
         return _FALLBACK_REPLY, None
+
+
+# ── Public entry point ────────────────────────────────────────────────────────
 
 
 async def answer_query(
@@ -146,29 +460,40 @@ async def answer_query(
     session_id: str,
     question: str,
 ) -> AdvisorResponse:
-    """Answer a farmer's plain-language question about a run's plan.
-
-    Args:
-        run_id:     The pipeline run whose plan to use as context.
-        session_id: Redis session key for conversation history (Tier-3).
-        question:   The farmer's question.
-
-    Returns:
-        AdvisorResponse with reply, run_id, session_id, and sources.
-    """
+    """Answer a farmer's plain-language question about a run's plan."""
     t0 = datetime.now(timezone.utc)
 
-    # Tier-2: load plan context
-    plan_row = await _load_plan(run_id)
-    summary = _plan_summary(plan_row)
+    import asyncio
 
-    # Tier-3: load conversation history
+    plan_row, run_detail, (farm_names, dp_info) = await asyncio.gather(
+        _load_plan_row(run_id),
+        _load_run_detail(run_id),
+        _load_name_maps(),
+    )
+
+    ctx = _assemble_plan_context(run_id, plan_row, run_detail, farm_names, dp_info)
+    ctx["run_id"] = run_id
+    system_prompt = ctx["system_prompt"]
+    logger.debug("advisor system_prompt:\n%s", system_prompt)
+
     history = await get_history(session_id)
 
-    # LLM call (temp=0.3 for friendly, slightly creative tone)
-    reply, tokens = await _llm_answer(question, summary, history, run_id)
+    reply, tokens = await _llm_answer(question, system_prompt, history)
+    if not reply:
+        ruled = _try_rule_based_answer(question, ctx)
+        if ruled:
+            reply, tokens = ruled, None
+        else:
+            logger.warning(
+                "advisor: OPENAI_API_KEY missing and no rule match — generic demo hint.",
+            )
+            reply = (
+                "I can answer plan questions once OPENAI_API_KEY is set. "
+                "From the loaded plan data, check the Mandis line in the system context "
+                "for shortage_kg per market."
+            )
+            tokens = None
 
-    # Tier-3: persist this turn to session buffer
     await push_message(session_id, "user", question)
     await push_message(session_id, "assistant", reply)
 
@@ -176,10 +501,15 @@ async def answer_query(
     sources = [f"plan:{run_id}"]
     if plan_row is not None:
         sources.append(f"db_plan_id:{getattr(plan_row, 'id', 'unknown')}")
+    if run_detail:
+        sources.append("run_log:plan_snapshot")
 
     logger.info(
         "advisor_agent: run=%s session=%s tokens=%s elapsed=%dms",
-        run_id, session_id, tokens, elapsed_ms,
+        run_id,
+        session_id,
+        tokens,
+        elapsed_ms,
     )
 
     return AdvisorResponse(

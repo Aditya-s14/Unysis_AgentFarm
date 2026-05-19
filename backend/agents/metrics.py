@@ -49,6 +49,13 @@ from collections import defaultdict
 
 from memory.state import AgentFarmState
 from models.schemas import AtRiskStock, DemandPoint, Farm
+from tools.scenario_effects import (
+    HEAT,
+    MONSOON,
+    market_absorption_factor,
+    naive_coordination_penalty,
+    normalize_scenario_type,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +208,26 @@ def _demand_matching_waste(
     return waste, total
 
 
+def _additional_spoilage_waste(
+    at_risk: list[AtRiskStock],
+    farm_to_dp: dict[str, str],
+    scenario_type: str,
+) -> float:
+    """Extra optimized waste from scenario-driven spoilage on unrouted urgent stock."""
+    st = normalize_scenario_type(scenario_type)
+    extra = 0.0
+    for stock in at_risk:
+        if stock.farm_id in farm_to_dp:
+            continue
+        hours = stock.hours_until_spoilage or 999.0
+        if st == HEAT and hours < 36.0:
+            urgency = max(0.0, (36.0 - hours) / 36.0)
+            extra += stock.kg_at_risk * urgency * 0.08
+        elif st == MONSOON and hours < 48.0:
+            extra += stock.kg_at_risk * 0.05
+    return extra
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -229,18 +256,24 @@ def compute_kpi_delta(state: AgentFarmState) -> dict[str, float]:
     route_plan = state.get("route_plan")
     retry = state.get("retry_count") or 0
 
+    scenario_type = normalize_scenario_type(state.get("scenario_type", ""))
+    absorption = market_absorption_factor(scenario_type)
     dp_daily_demand: dict[str, float] = {
-        dp.id: dp.base_demand_per_day for dp in demand_points
+        dp.id: dp.base_demand_per_day * absorption for dp in demand_points
     }
 
     # --- Naive baseline: each farm → nearest demand point ---
     naive_map = _naive_farm_to_dp(at_risk, farms, demand_points)
     naive_waste_kg, total_kg = _demand_matching_waste(at_risk, naive_map, dp_daily_demand)
+    naive_waste_kg *= naive_coordination_penalty(
+        scenario_type, at_risk_count=len(at_risk),
+    )
 
     # --- Optimised: use actual VRP assignments ---
     opt_map = _routed_farm_to_dp(state, farms, demand_points)
     # Farms absent from VRP routes count as fully wasted (no market reached)
     opt_waste_kg, _ = _demand_matching_waste(at_risk, opt_map, dp_daily_demand)
+    opt_waste_kg += _additional_spoilage_waste(at_risk, opt_map, scenario_type)
 
     # --- Route-level stats (coverage, urgency) ---
     visited = set(opt_map.keys())

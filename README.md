@@ -14,46 +14,89 @@ India loses an estimated **30–40% of its fresh produce** between farm and mark
 
 ## Architecture
 
-```
-Client (Next.js)
-  -> FastAPI Gateway
-    -> Orchestrator (LangGraph — entry, conflict resolution, final packaging)
-      -> +- Weather Agent --+  (parallel fan-out)
-         |                  +--> Inventory Agent -> Logistics Agent -> Validator -> Plan Output
-         +- Demand Agent ---+
-    -> Postgres + Redis + Outcome Store
+```mermaid
+flowchart TB
+  subgraph client["Client"]
+    UI["Next.js UI"]
+  end
 
-Advisor Agent (separate service, on-demand)
-  -> Reads finished plans from Postgres
-  -> Answers queries via /api/advisor/query
-  -> Maintains per-session conversation buffer
+  subgraph api["API layer"]
+    GW["FastAPI Gateway :8000"]
+  end
+
+  subgraph pipeline["LangGraph pipeline"]
+    ENTRY["Orchestrator entry"]
+    W["Weather agent"]
+    D["Demand agent"]
+    MERGE["Merge"]
+    INV["Inventory agent"]
+    LOG["Logistics agent"]
+    VAL["Validator"]
+    RETRY["Retry prep"]
+    EXIT["Orchestrator exit"]
+    PERSIST["Persist KPIs"]
+    ENTRY --> W
+    ENTRY --> D
+    W --> MERGE
+    D --> MERGE
+    MERGE --> INV
+    INV --> LOG
+    LOG --> VAL
+    VAL -->|valid| EXIT
+    VAL -->|invalid, retries left| RETRY
+    RETRY --> LOG
+    VAL -->|invalid, max retries| EXIT
+    EXIT --> PERSIST
+  end
+
+  subgraph data["Data & cache"]
+    PG[("PostgreSQL")]
+    RD[("Redis")]
+  end
+
+  subgraph advisor_svc["Advisor (on-demand)"]
+    ADV["Farmer Advisor API"]
+  end
+
+  UI --> GW
+  GW --> ENTRY
+  PERSIST --> PG
+  W --> RD
+  LOG --> RD
+  GW --> ADV
+  ADV --> PG
+  ADV --> RD
 ```
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full system deep-dive.
+**How it works:** The orchestrator validates inputs and loads run context. Weather and Demand run **in parallel** (fan-out), then Inventory and Logistics build an optimized plan. The Validator applies rule-based feasibility checks; on failure, Logistics re-solves with relaxed demand (up to two retries). The orchestrator exit packages the plan and KPIs vs a naive baseline. The **Farmer Advisor** is a separate service that reads finished plans from Postgres and answers follow-up questions with optional LLM + Redis session history.
+
+> **Note:** OR-Tools solves a **capacitated VRP** with per-route distance limits. Truck availability and timing-style checks run in the **Validator** after solving—not as OR-Tools time-window dimensions.
 
 ---
 
-## The Seven Agents
+## Agent roles
 
-| Agent | Role | LLM? | Primary Tools |
-|---|---|---|---|
+| Agent | Role | LLM? | Primary tools |
+|-------|------|------|----------------|
 | **Orchestrator** | Validates inputs, resolves conflicts, packages final plan | No | LangGraph state graph |
-| **Weather** | Fetches 7-day forecasts per farm, classifies risk (normal / warning / severe) | No | OpenWeatherMap API, Redis cache |
-| **Demand Forecast** | 7-day demand per mandi; adjusts for festivals, heatwaves, and past outcomes | Yes (temp 0) | Outcome Store, LLM |
-| **Inventory** | Tracks produce at farms; predicts spoilage windows by crop + temperature | Yes (temp 0) | Postgres, temperature data |
-| **Logistics** | Solves the VRP — truck to farm to mandi routing with capacity and time windows | No | Google OR-Tools, Maps API |
-| **Validator** | Rule-based feasibility check (capacity, time windows, driver hours); triggers re-plan | No | Constraint checker |
-| **Farmer Advisor** | Plain-language recommendations (English); interactive follow-up queries | Yes (temp 0.3) | LLM, Plan DB, Redis session |
+| **Weather** | Fetches forecasts per farm, classifies risk (normal / warning / severe). Falls back to synthetic if no API key. | No | OpenWeatherMap API (optional), Redis cache |
+| **Demand forecast** | 7-day demand per mandi; festival rules + optional LLM; bias correction from outcome store | Yes (optional) | Outcome store, LLM (OpenRouter / OpenAI) |
+| **Inventory** | Spoilage windows from crop and temperature; optional LLM for prioritisation | Yes (optional) | Temperature-adjusted shelf life |
+| **Logistics** | Capacitated VRP with distance limits; Haversine (×1.3) or Google Maps distance matrix | No | OR-Tools, distance matrix cache |
+| **Validator** | Rule-based feasibility: capacity, availability, weather routes, driver hours, urgent coverage; triggers retry loop | No | Constraint checker |
+| **Farmer advisor** | Plain-language answers using the current plan; session history | Yes | LLM, plan DB, Redis session |
+
+LLM agents work without API keys via rule-based fallbacks. For the best demo, provide an **OpenRouter** or **OpenAI** key.
 
 ---
 
-## Tech Stack
+## Tech stack
 
-- **Backend:** Python 3.11, FastAPI, LangGraph, Pydantic, SQLAlchemy 2.0 (async), Google OR-Tools
-- **LLMs:** OpenAI `gpt-4o-mini` via OpenRouter (OpenRouter API key works directly)
-- **Data:** PostgreSQL 16, Redis 7 (cache + session buffer)
-- **Frontend:** Next.js 14, React 18, Tailwind CSS, React-Leaflet, Recharts
-- **Infra:** Docker Compose (4 services: backend, frontend, postgres, redis)
+- **Backend:** Python 3.11, FastAPI, LangGraph, SQLAlchemy (async), OR-Tools
+- **LLMs:** OpenAI-compatible API (OpenRouter / OpenAI) — optional
+- **Data:** PostgreSQL, Redis (cache + sessions)
+- **Frontend:** Next.js 14, React, Tailwind, Leaflet, Recharts
+- **Infra:** Docker Compose
 
 ---
 
@@ -63,9 +106,9 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full system deep-dive.
 
 1. Open **http://localhost:3000/scenario**
 2. Select **Monsoon Disruption** → click **RUN SCENARIO →**
-3. Watch **7 AI agents** execute live (Weather → Demand → Inventory → Logistics → Validator → Orchestrator) — takes ~35 seconds
-4. Click **View Dashboard →** → check KPI cards (56% waste reduction vs naive baseline), dark map with saffron truck routes
-5. Switch tabs: **FARMER** (spoilage warnings + pickup times), **MANDI** (incoming supply vs demand bars), **TRANSPORT** (truck assignments + load bars) → go to **Advisor** → ask *"Which farm is highest risk today?"*
+3. Watch **6 agent roles** execute live (Weather → Demand → Inventory → Logistics → Validator → Orchestrator) — typically ~35–90 seconds for the 20-farm demo fixture
+4. Click **View Dashboard →** → check KPI cards (waste reduction vs naive baseline; typical range **20–60%** depending on scenario and seed data), map with truck routes
+5. Switch tabs: **FARMER** (spoilage warnings), **MANDI** (incoming supply vs demand), **TRANSPORT** (truck assignments) → open **Advisor** → ask a question about the **current plan** (e.g. mandi shortages or at-risk farms)
 
 ---
 
@@ -74,7 +117,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full system deep-dive.
 ### Prerequisites
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (includes Docker Compose)
-- An **OpenRouter** or **OpenAI** API key — get one free at https://openrouter.ai
+- An **OpenRouter** or **OpenAI** API key — recommended for LLM agents and the advisor ([openrouter.ai](https://openrouter.ai))
 
 ### 1 — Clone and configure environment
 
@@ -89,20 +132,22 @@ cp .env.example .env
 Open `.env` and fill in your keys:
 
 ```ini
-# Required for LLM agents (Demand, Inventory, Advisor)
+# Recommended for LLM agents (Demand, Inventory, Advisor)
 OPENAI_API_KEY=sk-or-v1-xxxxxxxxxxxx   # OpenRouter key OR OpenAI key
 
 # Optional — improves accuracy, falls back gracefully without them
 OPENWEATHER_API_KEY=                   # https://openweathermap.org/api
 GOOGLE_MAPS_API_KEY=                   # https://console.cloud.google.com
 
-# These are pre-set for Docker Compose — do not change unless running locally
+# Pre-set for Docker Compose — do not change unless running locally
 DATABASE_URL=postgresql+asyncpg://agentfarm:agentfarm@postgres:5432/agentfarm
 REDIS_URL=redis://redis:6379/0
 OPENAI_BASE_URL=https://openrouter.ai/api/v1
 ```
 
-> **No API key?** The demo still runs end-to-end. Weather and Logistics agents work without keys (Haversine fallback for distances). Demand and Inventory agents fall back to rule-based logic. The Advisor returns a curated static answer.
+> **No API key?** The demo still runs end-to-end. Weather uses scenario overlays when live weather is unavailable; Logistics uses Haversine distances without Google Maps. Demand and Inventory use rule-based logic. The Advisor answers from structured plan data when the LLM is unavailable.
+
+> **Live weather:** Set `OPENWEATHER_API_KEY` before `docker compose up` so the UI shows **Live (OpenWeather)** instead of simulated weather.
 
 ### 2 — Start all services
 
@@ -110,28 +155,28 @@ OPENAI_BASE_URL=https://openrouter.ai/api/v1
 docker compose up -d --build
 ```
 
-This builds and starts 4 containers:
+The backend installs from a **locked** `backend/requirements.txt` (generated from `requirements.in` via `pip-compile`), so builds are reproducible.
+
+**First build:** allow **10–20 minutes** while large wheels download (OR-Tools, LangGraph, pandas). Later rebuilds are faster when `requirements.txt` is unchanged. Ensure Docker Desktop is running and your network can reach Docker Hub and PyPI.
 
 | Container | Port | Role |
-|---|---|---|
+|-----------|------|------|
 | `agentfarm_frontend` | 3000 | Next.js UI |
 | `agentfarm_backend` | 8000 | FastAPI + LangGraph pipeline |
-| `agentfarm_postgres` | 5432 | Plan storage + outcome history |
-| `agentfarm_redis` | 6379 | Weather cache + advisor session buffer |
+| `agentfarm_postgres` | 5432 | Plans + outcome history |
+| `agentfarm_redis` | 6379 | Weather / distance cache + advisor sessions |
 
-Wait ~30 seconds for the database to seed, then open **http://localhost:3000**.
+Wait ~30 seconds after containers are **Up** for the database to seed, then open **http://localhost:3000**.
 
 ### 3 — Verify everything is healthy
 
 ```bash
-# All 4 containers should show "healthy" or "Up"
 docker compose ps
 
-# Backend health check
 curl http://localhost:8000/health
 # Expected: {"status":"ok"}
 
-# Swagger API docs
+# Interactive API docs
 open http://localhost:8000/docs
 ```
 
@@ -139,34 +184,48 @@ open http://localhost:8000/docs
 
 ```bash
 docker compose down          # stop containers, keep data
-docker compose down -v       # stop + wipe all volumes (fresh start)
+docker compose down -v       # stop and wipe volumes (fresh start)
 ```
 
 ---
 
-## Manual Development Setup (without Docker)
+## Python dependencies (backend)
 
-### Backend
+| File | Purpose |
+|------|---------|
+| `backend/requirements.in` | Direct dependencies you edit |
+| `backend/requirements.txt` | Locked tree for Docker and `pip install` (auto-generated) |
+| `backend/requirements-dev.txt` | Adds pytest for local / CI tests |
 
-Requires Python 3.11+ and a running Postgres + Redis instance.
+After changing `requirements.in`, regenerate the lockfile:
 
 ```bash
 cd backend
+./scripts/compile-requirements.sh          # macOS / Linux
+.\scripts\compile-requirements.ps1         # Windows
+```
 
-# Create and activate a virtual environment
+Commit both `requirements.in` and `requirements.txt` so evaluators get identical installs from `docker compose build`.
+
+---
+
+## Manual development setup (without Docker)
+
+### Backend
+
+Requires Python 3.11+ and running Postgres + Redis.
+
+```bash
+cd backend
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Set environment variables (or create a .env in backend/)
 export DATABASE_URL=postgresql+asyncpg://agentfarm:agentfarm@localhost:5432/agentfarm
 export REDIS_URL=redis://localhost:6379/0
 export OPENAI_API_KEY=sk-or-v1-xxxxxxxxxxxx
 export OPENAI_BASE_URL=https://openrouter.ai/api/v1
 
-# Run with hot-reload
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -176,79 +235,68 @@ Requires Node.js 18+.
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Point to the backend
 echo "NEXT_PUBLIC_API_URL=http://localhost:8000/api" > .env.local
-
-# Start dev server with hot-reload
 npm run dev
 ```
 
-Frontend runs at **http://localhost:3000**.
+Frontend: **http://localhost:3000**
 
 ---
 
-## Environment Variables Reference
+## Environment variables
 
 | Variable | Required | Default | Description |
-|---|---|---|---|
-| `OPENAI_API_KEY` | Recommended | — | OpenAI or OpenRouter API key for LLM agents |
-| `OPENAI_BASE_URL` | No | `https://api.openai.com/v1` | Override to `https://openrouter.ai/api/v1` for OpenRouter |
-| `OPENWEATHER_API_KEY` | No | — | Live weather data; falls back to simulated events |
-| `GOOGLE_MAPS_API_KEY` | No | — | Real distance matrix; falls back to Haversine formula |
-| `DATABASE_URL` | Yes | see `.env.example` | PostgreSQL connection string (asyncpg driver) |
-| `REDIS_URL` | Yes | see `.env.example` | Redis connection string |
-| `VRP_TIME_LIMIT` | No | `30` | OR-Tools VRP solver time limit in seconds |
-| `MAX_RETRIES` | No | `2` | Max plan retry loops before flagging for human review |
-| `PLANNING_TEMP` | No | `0.0` | LLM temperature for Demand + Inventory agents |
-| `ADVISOR_TEMP` | No | `0.3` | LLM temperature for Farmer Advisor (slightly warmer) |
+|----------|----------|---------|-------------|
+| `OPENAI_API_KEY` | Recommended | — | OpenRouter or OpenAI key for LLM agents and advisor |
+| `OPENAI_BASE_URL` | No | `https://api.openai.com/v1` | Use `https://openrouter.ai/api/v1` for OpenRouter |
+| `OPENWEATHER_API_KEY` | No | — | Live weather; synthetic + scenario overlay without it |
+| `GOOGLE_MAPS_API_KEY` | No | — | Road distances; Haversine ×1.3 fallback without it |
+| `DATABASE_URL` | Yes | see `.env.example` | PostgreSQL (asyncpg) |
+| `REDIS_URL` | Yes | see `.env.example` | Redis |
+| `VRP_TIME_LIMIT` | No | `30` | OR-Tools solver time limit (seconds) |
+| `MAX_RETRIES` | No | `2` | Validator retry cap before human review |
+| `ADVISOR_TEMP` | No | `0.3` | LLM temperature for the Farmer Advisor |
 
 ---
 
-## API Endpoints
+## API endpoints
 
 | Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/scenario/run` | Run a full scenario and receive the optimized plan + KPIs + agent traces |
-| `GET` | `/api/run/{runId}` | Fetch a persisted plan plus summary metrics |
-| `GET` | `/api/run/{runId}/traces` | Per-agent reasoning traces, tool calls, timings, token counts |
-| `POST` | `/api/advisor/query` | Ask the Advisor a contextual question about a finished plan |
-| `POST` | `/api/outcome/log` | Log real-world outcomes (feeds cross-run learning loop) |
+|--------|------|-------------|
+| `POST` | `/api/scenario/run` | Run full scenario → plan, KPIs, agent traces |
+| `GET` | `/api/run/{runId}` | Fetch persisted plan and summary |
+| `GET` | `/api/run/{runId}/traces` | Per-agent traces, tools, timings, tokens |
+| `POST` | `/api/advisor/query` | Ask the advisor about a finished plan |
+| `POST` | `/api/outcome/log` | Log outcomes (feeds cross-run learning) |
 | `GET` | `/health` | Liveness probe |
 
-Full interactive docs: **http://localhost:8000/docs**
+Interactive docs: **http://localhost:8000/docs**
 
 ---
 
-## Project Structure
+## Project structure
 
 ```
 Unysis_AgentFarm/
 ├── backend/
-│   ├── agents/            # 7 agent modules (weather, demand, inventory,
-│   │                      #   logistics, validator, orchestrator, advisor)
-│   ├── memory/            # 3-tier memory: state (T1), outcome store (T2), sessions (T3)
+│   ├── agents/            # weather, demand, inventory, logistics,
+│   │                      #   validator, orchestrator, advisor
+│   ├── memory/            # LangGraph state (T1), outcome store (T2), sessions (T3)
 │   ├── tools/             # weather_api, maps_api, vrp_solver, db
-│   ├── models/            # Pydantic schemas + SQLAlchemy ORM models
-│   ├── routes/            # FastAPI routers (scenario, run, advisor, outcome)
-│   ├── config.py          # Pydantic settings (reads .env)
-│   └── main.py            # FastAPI app entry point
+│   ├── models/            # Pydantic schemas + SQLAlchemy ORM
+│   ├── routes/            # scenario, run, advisor
+│   ├── graph.py           # LangGraph StateGraph
+│   └── main.py            # FastAPI entry
 ├── frontend/
 │   └── src/
-│       ├── components/    # SimulationPanel, MapView, KPIGrid, AgentTrace,
-│       │                  #   ScenarioForm, ChatInterface, Dashboard
-│       ├── pages/         # scenario.js, dashboard.js, advisor.js, runs.js
+│       ├── components/    # SimulationPanel, MapView, KPIGrid, ScenarioForm, …
+│       ├── pages/         # scenario, dashboard, advisor, runs
 │       ├── hooks/         # useScenario, useRuns, useAdvisor
-│       ├── context/       # AppContext (run id, session id)
-│       └── utils/         # api.js, demoFixtures.js, formatters.js
-├── data/                  # Seed CSVs — farms, demand points, trucks, outcomes
+│       └── utils/         # demoFixtures, formatters
+├── data/                  # Seed CSVs (farms, mandis, trucks, outcomes)
 ├── docker-compose.yml
-├── .env.example           # Copy to .env and fill in keys
-├── ARCHITECTURE.md        # Full system design document
-├── CONTRIBUTING.md        # Branch naming, commit conventions, review workflow
+├── .env.example
 └── README.md
 ```
 
@@ -256,55 +304,70 @@ Unysis_AgentFarm/
 
 ## Troubleshooting
 
+**Docker build fails (timeout, `Read timed out`, or `registry-1.docker.io` DNS errors)**  
+Retry the build; network issues are often temporary. Ensure Docker Desktop is running, disable VPNs that block PyPI or Docker Hub, then:
+
+```bash
+docker compose build backend
+docker compose up -d
+```
+
 **Backend container keeps restarting**
+
 ```bash
 docker compose logs backend --tail 50
-# Common causes: bad DATABASE_URL, missing .env, Python import error
 ```
 
 **"Pipeline error — check that the backend is running at localhost:8000"**
+
 ```bash
-docker compose ps          # backend should be Up (healthy)
+docker compose ps
 curl http://localhost:8000/health
 docker compose logs backend --tail 30
 ```
 
 **LLM agents return rule-based answers only**
-```bash
-# Check the key is set
-grep OPENAI_API_KEY .env
 
-# Check the backend sees it
+```bash
+grep OPENAI_API_KEY .env
 docker compose exec backend env | grep OPENAI
 ```
 
-**Map tiles not loading**
-The map uses OpenStreetMap tiles — requires internet access. The farm/mandi markers and routes still render correctly without tiles.
+**Map tiles not loading**  
+Uses OpenStreetMap tiles (needs internet). Markers and route polylines still render without tiles.
 
-**Port already in use**
-```bash
-# Change ports in docker-compose.yml, e.g. "3001:3000" for the frontend
-```
+**Port already in use**  
+Change host ports in `docker-compose.yml` (e.g. `"3001:3000"` for the frontend).
 
 ---
 
 ## Testing
 
 ```bash
-# Backend unit + integration tests
+# Backend pipeline smoke test (mocked weather / maps / LLM)
 cd backend
-pytest --cov
+pip install -r requirements-dev.txt
+pytest tests/test_pipeline_smoke.py -v
 
 # Frontend lint
 cd frontend
 npm run lint
 ```
 
+### Pre-demo checklist
+
+```bash
+bash scripts/validate_demo.sh          # macOS / Linux
+.\scripts\validate_demo.ps1            # Windows PowerShell
+```
+
+Verifies services, `/health`, seed counts, and a minimal `POST /api/scenario/run`.
+
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for branch naming, commit conventions, code style, and review workflow.
+See the repository issues for contribution guidelines.
 
 ---
 

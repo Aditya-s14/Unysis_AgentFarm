@@ -34,6 +34,7 @@ from config import get_settings
 from memory.outcome_store import get_demand_history
 from memory.state import AgentFarmState, AgentTrace
 from models.schemas import DemandPoint, PlanOutcome
+from tools.scenario_effects import scenario_trace_note
 
 logger = logging.getLogger(__name__)
 
@@ -246,7 +247,8 @@ async def run(state: AgentFarmState) -> AgentFarmState:
             f"{len(demand_points)} demand points; 7-day forecast; "
             f"llm={'yes' if llm_tokens else 'no (rule-based fallback)'}; "
             f"supply_factor={supply_factor}; bias_correction=applied; "
-            f"severe_pct={severe_pct}%"
+            f"severe_pct={severe_pct}%. "
+            + scenario_trace_note(state.get("scenario_type", ""))
         ),
         "token_count": llm_tokens,
     }

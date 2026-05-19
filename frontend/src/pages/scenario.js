@@ -5,6 +5,7 @@ import DashboardLayout from '@/components/Dashboard/DashboardLayout';
 import ScenarioForm from '@/components/ScenarioBuilder/ScenarioForm';
 import MapView from '@/components/Map/MapView';
 import SimulationPanel from '@/components/AgentSimulation/SimulationPanel';
+import WeatherSourceBanner from '@/components/Dashboard/WeatherSourceBanner';
 import {
   DEMO_MAP_FARMS,
   DEMO_MAP_MANDIS,
@@ -22,14 +23,16 @@ import {
  *   done        Animation finished; show summary card + "View Dashboard →"
  */
 export default function ScenarioPage() {
-  const [simState, setSimState]   = useState('idle');   // 'idle' | 'running' | 'simulating' | 'done' | 'error'
-  const [simTraces, setSimTraces] = useState([]);
-  const [apiResult, setApiResult] = useState(null);
-  const [elapsedMs, setElapsedMs] = useState(null);
-  const [simError, setSimError]   = useState(null);
+  const [simState, setSimState]       = useState('idle');   // 'idle' | 'running' | 'simulating' | 'done' | 'error'
+  const [simTraces, setSimTraces]     = useState([]);
+  const [apiResult, setApiResult]     = useState(null);
+  const [elapsedMs, setElapsedMs]     = useState(null);
+  const [simError, setSimError]       = useState(null);
+  const [selectedType, setSelectedType] = useState('monsoon_disruption');
   const startRef = useRef(null);
 
-  const handleRunStart = () => {
+  const handleRunStart = (scenarioType) => {
+    if (scenarioType) setSelectedType(scenarioType);
     startRef.current = Date.now();
     setSimState('running');
   };
@@ -60,6 +63,7 @@ export default function ScenarioPage() {
     setApiResult(null);
     setElapsedMs(null);
     setSimError(null);
+    setSelectedType('monsoon_disruption');
     startRef.current = null;
   };
 
@@ -177,7 +181,10 @@ export default function ScenarioPage() {
   }
 
   /* ── Running / simulating / done ─────────────────────────────────────── */
-  const scenarioLabel = apiResult?.scenario_type?.replace(/_/g, ' ').toUpperCase() || 'MONSOON DISRUPTION';
+  // Prefer the confirmed type from the API response; fall back to the type
+  // captured at submit time (available immediately, before the API responds).
+  const activeType    = apiResult?.scenario_type || selectedType;
+  const scenarioLabel = activeType.replace(/_/g, ' ').toUpperCase();
   const wastePct      = apiResult?.kpis?.waste_reduction_pct ?? 0;
   const coveredCount  = apiResult?.kpis?.covered_count       ?? 0;
   const routeCount    = apiResult?.kpis?.route_count         ?? 0;
@@ -188,7 +195,11 @@ export default function ScenarioPage() {
       <Head><title>Running Scenario | AgentFarm</title></Head>
       <DashboardLayout
         title={simState === 'done' ? 'Plan Ready' : 'Agents Running'}
-        subtitle={simState === 'done' ? 'Scenario complete' : '6 autonomous agents optimising supply chain...'}
+        subtitle={
+          simState === 'done'
+            ? '5 core agents + orchestrator · scenario complete'
+            : 'Pipeline: 6 agents executing (5 core + orchestrator)'
+        }
       >
         <div className="max-w-2xl mx-auto space-y-6">
 
@@ -220,10 +231,15 @@ export default function ScenarioPage() {
             </div>
           )}
 
+          {apiResult?.weather_summary && (
+            <WeatherSourceBanner weatherSummary={apiResult.weather_summary} />
+          )}
+
           {/* ── Simulation panel ── */}
           <SimulationPanel
             traces={simTraces}
             isRunning={simState !== 'done'}
+            scenarioType={activeType}
             onComplete={handleSimComplete}
           />
 
@@ -243,6 +259,10 @@ export default function ScenarioPage() {
                 style={{ color: 'var(--green-ok)', fontSize: '0.65rem', letterSpacing: '0.2em' }}
               >
                 ▸ plan generated successfully
+              </p>
+
+              <p className="font-mono" style={{ fontSize: '12px', color: 'var(--green-ok)', lineHeight: 1.55 }}>
+                ✅ Pipeline completed — 6 agents (Weather, Demand, Inventory, Logistics, Validator, Orchestrator)
               </p>
 
               <div className="grid grid-cols-3 gap-4">

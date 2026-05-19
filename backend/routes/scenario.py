@@ -67,6 +67,10 @@ class RunScenarioResponse(BaseModel):
     kpis: dict[str, float] = Field(default_factory=dict)
     agent_traces: list[dict[str, Any]] = Field(default_factory=list)
     human_review: bool = False
+    demand_forecast: dict[str, list[float]] = Field(default_factory=dict)
+    at_risk_stock: list[dict[str, Any]] = Field(default_factory=list)
+    weather_summary: dict[str, Any] = Field(default_factory=dict)
+    weather_risk_summary: dict[str, str] = Field(default_factory=dict)
 
 
 @router.post("/scenario/run", response_model=RunScenarioResponse)
@@ -86,6 +90,10 @@ async def run_scenario_endpoint(body: RunScenarioRequest) -> RunScenarioResponse
             kpis=result.kpis,
             agent_traces=result.agent_traces,
             human_review=result.human_review,
+            demand_forecast=result.demand_forecast,
+            at_risk_stock=result.at_risk_stock,
+            weather_summary=result.weather_summary,
+            weather_risk_summary=result.weather_risk_summary,
         )
     except Exception as exc:
         logger.exception("POST /api/scenario/run failed")

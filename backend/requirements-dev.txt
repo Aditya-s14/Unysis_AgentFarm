@@ -1,0 +1,5 @@
+# Dev/test dependencies (not installed in the production Docker image).
+# Uses the locked runtime tree from pip-compile.
+-r requirements.txt
+pytest==8.3.4
+pytest-asyncio==0.25.2

@@ -34,13 +34,16 @@ def _build_demands(
     farms: list[Farm],
     demand_points: list[DemandPoint],
     at_risk_stock: list[AtRiskStock],
+    *,
+    demand_scale: float = 1.0,
 ) -> list[int]:
+    scale = max(0.1, min(1.0, demand_scale))
     n = 1 + len(farms) + len(demand_points)
     demands = [0] * n
     for i, farm in enumerate(farms):
-        demands[1 + i] = _demand_at_farm(farm, at_risk_stock)
+        demands[1 + i] = max(1, int(_demand_at_farm(farm, at_risk_stock) * scale))
     for j, dp in enumerate(demand_points):
-        demands[1 + len(farms) + j] = _demand_at_dp(dp)
+        demands[1 + len(farms) + j] = max(1, int(_demand_at_dp(dp) * scale))
     return demands
 
 
@@ -60,11 +63,13 @@ def _node_coord_index(
     return dp.lat, dp.lng, None, dp.id
 
 
+_MAX_ROUTE_KM = 14.0 * 50.0  # legal drive limit × conservative speed (km)
+
+
 def _try_ortools(
     distance_matrix_km: list[list[float]],
     demands: list[int],
     trucks: list[Truck],
-    relaxation_factor: float,
     time_limit_s: int,
     farms: list[Farm],
     demand_points: list[DemandPoint],
@@ -79,9 +84,7 @@ def _try_ortools(
         [max(1, int(distance_matrix_km[i][j] * 1000)) for j in range(n)] for i in range(n)
     ]
 
-    capacities = [
-        max(1, int(trucks[i].capacity_kg * relaxation_factor)) for i in range(num_vehicles)
-    ]
+    capacities = [max(1, int(trucks[i].capacity_kg)) for i in range(num_vehicles)]
 
     manager = pywrapcp.RoutingIndexManager(n, num_vehicles, depot)
     routing = pywrapcp.RoutingModel(manager)
@@ -104,6 +107,15 @@ def _try_ortools(
         capacities,
         True,
         "Capacity",
+    )
+
+    max_route_m = int(_MAX_ROUTE_KM * 1000)
+    routing.AddDimension(
+        transit_index,
+        0,
+        max_route_m,
+        True,
+        "Distance",
     )
 
     params = pywrapcp.DefaultRoutingSearchParameters()
@@ -153,7 +165,7 @@ def _try_ortools(
             Route(
                 truck_id=truck.id,
                 stops=stops,
-                distance_km=round(dist_km, 3) if stops else None,
+                distance_km=round(max(0.0, dist_km), 3) if stops else None,
             ),
         )
         total_km += dist_km
@@ -164,7 +176,7 @@ def _try_ortools(
             sol.ObjectiveValue() / 1000.0,
             3,
         ),
-        notes=f"ortools relaxation={relaxation_factor}",
+        notes="ortools",
     )
 
 
@@ -174,7 +186,6 @@ def _greedy_route_plan(
     trucks: list[Truck],
     farms: list[Farm],
     demand_points: list[DemandPoint],
-    relaxation_factor: float,
 ) -> RoutePlan:
     """Nearest-neighbor split across trucks when capacities allow; else round-robin."""
     n = len(distance_matrix_km)
@@ -182,9 +193,7 @@ def _greedy_route_plan(
     customers.sort(key=lambda u: distance_matrix_km[0][u])
 
     num_vehicles = min(len(trucks), n - 1)
-    capacities = [
-        max(1, int(trucks[i].capacity_kg * relaxation_factor)) for i in range(num_vehicles)
-    ]
+    capacities = [max(1, int(trucks[i].capacity_kg)) for i in range(num_vehicles)]
 
     assignments: list[list[int]] = [[] for _ in range(num_vehicles)]
     loads = [0] * num_vehicles
@@ -201,9 +210,11 @@ def _greedy_route_plan(
                 placed = True
                 break
         if not placed:
-            v = min(range(num_vehicles), key=lambda vi: loads[vi])
-            assignments[v].append(node)
-            loads[v] += demands[node]
+            logger.warning(
+                "greedy: node %d demand %d kg exceeds remaining capacity on all trucks",
+                node,
+                demands[node],
+            )
 
     routes_out: list[Route] = []
     for v in range(num_vehicles):
@@ -231,7 +242,7 @@ def _greedy_route_plan(
             Route(
                 truck_id=truck.id,
                 stops=stops,
-                distance_km=round(dist_km, 3) if stops else None,
+                distance_km=round(max(0.0, dist_km), 3) if stops else None,
             ),
         )
 
@@ -248,14 +259,15 @@ def solve_vrp(
     trucks: list[Truck],
     at_risk_stock: list[AtRiskStock],
     distance_matrix: list[list[float]],
-    relaxation_factor: float = 1.0,
+    demand_scale: float = 1.0,
 ) -> RoutePlan:
     """
     CVRP on nodes ``[depot, *farms, *demand_points]`` (index 0 = depot).
 
     ``distance_matrix`` must be square ``(1 + len(farms) + len(demand_points))``. Depot row/col 0;
-    distances in **km**. Uses OR-Tools with a **30s** limit (from ``vrp_time_limit`` settings) and
-    ``relaxation_factor`` on vehicle capacities; if no solution, uses greedy allocation.
+    distances in **km**. Uses OR-Tools with a **30s** limit (from ``vrp_time_limit`` settings),
+    real truck capacities, a per-route distance cap, and ``demand_scale`` on retry; if no solution,
+    uses greedy allocation.
     """
     expected = 1 + len(farms) + len(demand_points)
     if len(distance_matrix) != expected or any(len(row) != expected for row in distance_matrix):
@@ -263,14 +275,18 @@ def solve_vrp(
             f"distance_matrix must be {expected}x{expected} for current farms/demand_points",
         )
 
-    demands = _build_demands(farms, demand_points, at_risk_stock)
+    demands = _build_demands(
+        farms,
+        demand_points,
+        at_risk_stock,
+        demand_scale=demand_scale,
+    )
     tl = max(1, int(get_settings().vrp_time_limit))
 
     plan = _try_ortools(
         distance_matrix,
         demands,
         trucks,
-        relaxation_factor,
         tl,
         farms,
         demand_points,
@@ -285,5 +301,4 @@ def solve_vrp(
         trucks,
         farms,
         demand_points,
-        relaxation_factor,
     )

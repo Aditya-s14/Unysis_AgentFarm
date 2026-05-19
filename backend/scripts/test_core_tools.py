@@ -67,7 +67,7 @@ def load_farms(limit: int | None = None) -> list[Farm]:
 async def run_weather(farm_count: int = 20) -> None:
     farms = load_farms(limit=farm_count)
     t0 = time.perf_counter()
-    events = await fetch_weather(farms)
+    events = (await fetch_weather(farms))["events"]
     dt = time.perf_counter() - t0
     assert len(events) == len(farms), (len(events), len(farms))
     print(f"[weather] {len(events)} WeatherEvents in {dt:.2f}s (fallback or live)")
@@ -168,7 +168,7 @@ async def run_vrp() -> None:
         trucks,
         at_risk,
         matrix,
-        relaxation_factor=1.0,
+        demand_scale=1.0,
     )
     dt = time.perf_counter() - t0
     assert plan.routes, "RoutePlan should contain routes"

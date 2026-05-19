@@ -123,13 +123,13 @@ async def main() -> int:
     os.environ.setdefault("VRP_TIME_LIMIT", "5")
     get_settings.cache_clear()
 
-    plan = solve_vrp(farms, dps, trucks, at_risk, matrix, relaxation_factor=1.0)
+    plan = solve_vrp(farms, dps, trucks, at_risk, matrix, demand_scale=1.0)
     print(
         f"vrp: {len(plan.routes)} routes, "
         f"objective={plan.objective_value}, notes={plan.notes!r}",
     )
 
-    events = await fetch_weather(farms)
+    events = (await fetch_weather(farms))["events"]
     risk_summary = {f.id: e.severity for f, e in zip(farms, events)}
 
     state = initial_agent_farm_state(run_id="validator-smoke", scenario_type="normal")

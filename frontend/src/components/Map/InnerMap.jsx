@@ -1,4 +1,5 @@
-import { MapContainer, TileLayer } from 'react-leaflet';
+import { useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import FarmMarker from './FarmMarker';
 import MandiMarker from './MandiMarker';
 import RoutePolyline from './RoutePolyline';
@@ -8,14 +9,37 @@ const MAP_CENTER = [13.1, 77.7];
 const DEFAULT_ZOOM = 9;
 
 /**
+ * FlyToController — headless component that calls map.flyTo() whenever
+ * `coords` changes. Placed inside MapContainer so it can access the map
+ * instance via useMap().
+ */
+function FlyToController({ coords }) {
+  const map = useMap();
+  useEffect(() => {
+    if (coords) {
+      map.flyTo(coords, 11, { animate: true, duration: 1.2 });
+    }
+  }, [coords, map]);
+  return null;
+}
+
+/**
  * InnerMap — the actual react-leaflet map. Rendered client-side only
  * via dynamic import from MapView.jsx.
  *
- * Uses CartoDB Dark Matter tiles so the map blends into the mission-control
- * aesthetic. When ``routes`` is empty we still draw markers (with a
- * console.warn for debugging the polylines pathway).
+ * Props:
+ *   farms           Farm[]          Farm markers.
+ *   demandPoints    DemandPoint[]   Mandi markers.
+ *   routes          Route[]         Polyline routes; each has truckId and stops.
+ *   selectedTruckId string | null   If set, highlights that truck's route and
+ *                                   fades all others.
  */
-export default function InnerMap({ farms = [], demandPoints = [], routes = [] }) {
+export default function InnerMap({
+  farms = [],
+  demandPoints = [],
+  routes = [],
+  selectedTruckId = null,
+}) {
   if (typeof window !== 'undefined' && (!Array.isArray(routes) || routes.length === 0)) {
     // eslint-disable-next-line no-console
     console.warn(
@@ -23,6 +47,19 @@ export default function InnerMap({ farms = [], demandPoints = [], routes = [] })
         'Markers will still render.',
     );
   }
+
+  // Compute flyTo target: first stop of the selected truck's route.
+  const flyCoords = useMemo(() => {
+    if (!selectedTruckId) return null;
+    const route = routes.find((r) => {
+      const vid = r.truckId ?? r.vehicle_id ?? r.id;
+      return vid === selectedTruckId;
+    });
+    const first = route?.stops?.[0];
+    return first ? [first.lat, first.lng] : null;
+  }, [selectedTruckId, routes]);
+
+  const hasSelection = selectedTruckId != null;
 
   return (
     <MapContainer
@@ -36,15 +73,30 @@ export default function InnerMap({ farms = [], demandPoints = [], routes = [] })
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         subdomains="abcd"
       />
+
+      {/* Fly to selected truck's first stop */}
+      {flyCoords && <FlyToController coords={flyCoords} />}
+
       {farms.map((farm) => (
         <FarmMarker key={farm.id} farm={farm} />
       ))}
       {demandPoints.map((dp) => (
         <MandiMarker key={dp.id} mandi={dp} />
       ))}
-      {(routes || []).map((route, idx) => (
-        <RoutePolyline key={route.id || idx} route={route} />
-      ))}
+      {(routes || []).map((route, idx) => {
+        const vehicleId = route.truckId ?? route.vehicle_id ?? route.id;
+        const routeKey = vehicleId || idx;
+        const isSelected = hasSelection && vehicleId === selectedTruckId;
+        const isDeemphasized = hasSelection && !isSelected;
+        return (
+          <RoutePolyline
+            key={routeKey}
+            route={route}
+            isSelected={isSelected}
+            isDeemphasized={isDeemphasized}
+          />
+        );
+      })}
     </MapContainer>
   );
 }

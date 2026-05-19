@@ -57,16 +57,4 @@ export async function logOutcome(outcomeBody) {
   return data;
 }
 
-/** GET /api/farms — list known farms (seed + user-created). */
-export async function getFarms() {
-  const { data } = await client.get('/farms');
-  return data;
-}
-
-/** POST /api/farms — register a new farm. */
-export async function createFarm(body) {
-  const { data } = await client.post('/farms', body);
-  return data;
-}
-
 export default client;

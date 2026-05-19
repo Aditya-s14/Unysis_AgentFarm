@@ -8,7 +8,7 @@ orchestrator_entry(state):
 
 orchestrator_exit(state):
   - Compute KPI deltas vs naive baseline via metrics.compute_kpi_delta().
-  - If retry_count >= max_retries, flag for human review (still persist).
+  - If max retries exhausted and validation still fails, flag for human review (still persist).
   - Persist Plan + RunLog to Postgres via tools.db (graceful no-op if DB unavailable).
   - Set state["final_plan"].
 
@@ -22,12 +22,12 @@ import uuid
 from datetime import datetime, timezone
 
 from agents.metrics import compute_kpi_delta
+from agents.review_flags import max_retries, needs_human_review
 from memory.state import AgentFarmState, AgentTrace
 from models.schemas import Plan, ValidationResult
+from tools.scenario_effects import normalize_scenario_type, scenario_trace_note
 
 logger = logging.getLogger(__name__)
-
-_MAX_RETRIES = 2
 
 
 async def orchestrator_entry(state: AgentFarmState) -> AgentFarmState:
@@ -39,6 +39,10 @@ async def orchestrator_entry(state: AgentFarmState) -> AgentFarmState:
         state["run_id"] = str(uuid.uuid4())
 
     run_id = state["run_id"]
+    raw_scenario = state.get("scenario_type", "")
+    state["scenario_type_raw"] = raw_scenario
+    scenario_type = normalize_scenario_type(raw_scenario)
+    state["scenario_type"] = scenario_type
 
     # Ensure trace list exists
     state.setdefault("agent_traces", [])
@@ -72,10 +76,11 @@ async def orchestrator_entry(state: AgentFarmState) -> AgentFarmState:
         logger.debug("orchestrator_entry: could not count outcomes: %s", exc)
 
     notes = (
-        f"run_id={run_id}; "
+        f"run_id={run_id}; scenario_type={scenario_type}; "
         f"farms={len(farms)}, demand_points={len(demand_points)}, trucks={len(trucks)}; "
         f"historical_outcomes_available={recent_outcomes_count}; "
-        f"input_errors={input_errors or 'none'}"
+        f"input_errors={input_errors or 'none'}. "
+        + scenario_trace_note(scenario_type)
     )
     trace: AgentTrace = {
         "agent_name": "orchestrator_entry",
@@ -103,13 +108,12 @@ async def orchestrator_exit(state: AgentFarmState) -> AgentFarmState:
     # KPI computation
     kpi = compute_kpi_delta(state)
 
-    # Check if max retries were exhausted
     retry_count = state.get("retry_count") or 0
-    human_review_needed = retry_count >= _MAX_RETRIES
+    human_review_needed = needs_human_review(state)
     if human_review_needed:
         logger.warning(
-            "orchestrator_exit: max retries (%d) reached for run %s; flagging for human review",
-            _MAX_RETRIES, run_id,
+            "orchestrator_exit: max retries (%d) exhausted with invalid plan for run %s",
+            max_retries(), run_id,
         )
 
     validation = state.get("validation_result")
@@ -127,9 +131,22 @@ async def orchestrator_exit(state: AgentFarmState) -> AgentFarmState:
         )
         plan_id = str(plan_row.id)
 
-        kpi_detail = {**kpi, "human_review_needed": human_review_needed}
+        at_risk_raw = state.get("at_risk_stock") or []
+        kpi_detail = {
+            **kpi,
+            "human_review_needed": human_review_needed,
+            "scenario_type": state.get("scenario_type") or "normal",
+            "at_risk_stock": [
+                s.model_dump() if hasattr(s, "model_dump") else s for s in at_risk_raw
+            ],
+            "weather_summary": dict(state.get("weather_summary") or {}),
+            "weather_risk_summary": dict(state.get("weather_risk_summary") or {}),
+            "demand_forecast": dict(state.get("demand_forecast") or {}),
+        }
         if human_review_needed:
-            kpi_detail["human_review_reason"] = f"max_retries={_MAX_RETRIES} exhausted"
+            kpi_detail["human_review_reason"] = (
+                f"max_retries={max_retries()} exhausted with validation still failing"
+            )
         # Store all agent traces so GET /api/run/{run_id}/traces can return them.
         kpi_detail["agent_traces"] = list(state.get("agent_traces") or [])
 
@@ -160,9 +177,11 @@ async def orchestrator_exit(state: AgentFarmState) -> AgentFarmState:
         "tools_used": ["metrics.compute_kpi_delta", "tools.db.create_plan", "tools.db.create_run_log"],
         "notes": (
             f"plan_id={plan_id or 'not persisted'}; "
+            f"scenario_type={state.get('scenario_type', '')}; "
             f"waste_reduction={kpi['waste_reduction_pct']:.1f}%; "
             f"coverage={kpi['coverage_pct']:.1f}%; "
-            f"human_review={'YES' if human_review_needed else 'no'}"
+            f"human_review={'YES' if human_review_needed else 'no'}. "
+            + scenario_trace_note(state.get("scenario_type", ""))
         ),
         "token_count": None,
     }

@@ -7,9 +7,10 @@ Shelf-life table (base days at ambient temperature):
   tomato=4, onion=14, banana=3, mango=5, potato=21, grape=7,
   orange=10, apple=21, corn=5, rice/wheat=180, default=7
 
-Temperature adjustment:
-  WeatherEvent.description containing "heat_wave" (proxy for temp > 35 °C) →
-  shelf life reduced by 30% (factor 0.70).
+Scenario shelf-life adjustment (via scenario_effects.shelf_life_factor):
+  heat_wave          → 40% reduction (factor 0.60)
+  monsoon_disruption → 20% humidity reduction (factor 0.80)
+  normal_day         → no reduction
 
 days_since_harvest:
   Derived from Farm.harvest_window_start; 0 if harvest hasn't started yet.
@@ -31,6 +32,12 @@ from typing import Any
 from config import get_settings
 from memory.state import AgentFarmState, AgentTrace
 from models.schemas import AtRiskStock, WeatherEvent
+from tools.scenario_effects import (
+    normalize_scenario_type,
+    scenario_adjustment_details,
+    scenario_trace_note,
+    shelf_life_factor,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +57,6 @@ _SHELF_LIFE_DAYS: dict[str, int] = {
     "default": 7,
 }
 
-_HEAT_FACTOR = 0.70          # shelf life multiplier when heat_wave detected
 _AT_RISK_THRESHOLD_DAYS = 5  # flag farms within this many days of spoilage
 
 
@@ -63,15 +69,19 @@ def _base_shelf_days(crop_type: str) -> int:
 
 
 def _is_heat_wave(event: WeatherEvent | None) -> bool:
-    """True when the weather description flags a heat wave (temp > 40 °C proxy)."""
     if event is None:
         return False
     return "heat_wave" in (event.description or "").lower()
 
 
-def _effective_shelf_days(crop_type: str, event: WeatherEvent | None) -> float:
+def _effective_shelf_days(
+    crop_type: str,
+    scenario_type: str,
+    event: WeatherEvent | None,
+) -> float:
     base = _base_shelf_days(crop_type)
-    return base * _HEAT_FACTOR if _is_heat_wave(event) else float(base)
+    factor = shelf_life_factor(scenario_type)
+    return base * factor
 
 
 async def _llm_rank(
@@ -137,6 +147,10 @@ async def run(state: AgentFarmState) -> AgentFarmState:
     farms = state.get("farms", [])
     weather_events = state.get("weather_events", [])
     weather_risk_summary = state.get("weather_risk_summary", {})
+    raw_scenario = state.get("scenario_type_raw") or state.get("scenario_type", "")
+    scenario_type = normalize_scenario_type(raw_scenario)
+    state["scenario_type"] = scenario_type
+    shelf_factor = shelf_life_factor(scenario_type)
 
     # Build farm_id → WeatherEvent; events are in the same order as farms
     event_by_farm: dict[str, WeatherEvent] = {
@@ -152,7 +166,7 @@ async def run(state: AgentFarmState) -> AgentFarmState:
             continue  # not yet harvested
 
         event = event_by_farm.get(farm.id)
-        shelf_days = _effective_shelf_days(farm.crop_type, event)
+        shelf_days = _effective_shelf_days(farm.crop_type, scenario_type, event)
         remaining_days = shelf_days - days_since
         hours_until_spoilage = max(0.0, remaining_days * 24.0)
 
@@ -175,8 +189,9 @@ async def run(state: AgentFarmState) -> AgentFarmState:
             f"days_since_harvest={days_since}",
             f"weather={risk_level}",
         ]
-        if _is_heat_wave(event):
-            reason_parts.append("temp_adjusted(-30%)")
+        if shelf_factor < 1.0:
+            pct = int(round((1.0 - shelf_factor) * 100))
+            reason_parts.append(f"scenario_shelf_adjusted(-{pct}%)")
 
         risk_until = today + timedelta(days=max(0, int(remaining_days)))
 
@@ -223,10 +238,16 @@ async def run(state: AgentFarmState) -> AgentFarmState:
         ],
         "notes": (
             f"{len(farms)} farms evaluated; "
-            f"{len(at_risk)} at-risk (threshold<={_AT_RISK_THRESHOLD_DAYS}d); "
-            f"llm_rank={'yes' if llm_order else 'no (sorted by hours_until_spoilage)'}"
+            f"{len(at_risk)} at-risk (threshold<={_AT_RISK_THRESHOLD_DAYS}d, shelf_factor={shelf_factor:.2f}); "
+            f"llm_rank={'yes' if llm_order else 'no (sorted by hours_until_spoilage)'}. "
+            + scenario_trace_note(raw_scenario)
         ),
         "token_count": llm_tokens,
+        "details": {
+            "scenario_adjustments": scenario_adjustment_details(
+                scenario_type=raw_scenario,
+            ),
+        },
     }
     state["agent_traces"] = [*state.get("agent_traces", []), trace]
 

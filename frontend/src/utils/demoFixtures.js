@@ -67,6 +67,12 @@ export const DEMO_TRUCKS = [
   { id: 'tr-010', capacity_kg: 5000, cost_per_km: 20.10, availability_start: '05:30:00', availability_end: '21:15:00' },
 ];
 
+/** Undersized fleet to trigger validator capacity retries (demo / QA). */
+export const DEMO_TRUCKS_CAPACITY_STRESS = DEMO_TRUCKS.slice(0, 3).map((t) => ({
+  ...t,
+  capacity_kg: 400,
+}));
+
 // ── MapView adapters ──────────────────────────────────────────────────────
 
 /** Adapt an API-shaped farm to the {location:{lat,lng}} shape FarmMarker expects. */

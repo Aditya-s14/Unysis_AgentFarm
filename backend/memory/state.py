@@ -26,6 +26,8 @@ class AgentTrace(TypedDict, total=False):
     tools_used: list[str]
     notes: str
     token_count: NotRequired[int | None]
+    execution_type: NotRequired[str]
+    details: NotRequired[dict]
 
 
 class AgentFarmState(TypedDict, total=False):
@@ -36,10 +38,12 @@ class AgentFarmState(TypedDict, total=False):
     demand_points: list[DemandPoint]
     trucks: list[Truck]
     scenario_type: str
+    scenario_type_raw: NotRequired[str]
 
     # Weather agent
     weather_events: list[WeatherEvent]
     weather_risk_summary: dict[str, str]
+    weather_fetch_meta: dict
 
     # Demand agent (series per demand point id)
     demand_forecast: dict[str, list[float]]

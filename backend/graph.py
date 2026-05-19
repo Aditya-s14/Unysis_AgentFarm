@@ -21,10 +21,10 @@ Graph topology
            │                                         │
         retry_prep (bumps retry metadata)          END
            │
-        logistics  (cycle; logistics reads retry_count → higher relaxation_factor)
+        logistics  (cycle; logistics reads retry_count → lower demand_scale)
            │
         validate
-           └── (valid=False, retry >= 2) ──► exit (human_review=True)
+           └── (valid=False, retry >= max) ──► exit (human_review if still invalid)
 
 Node wrappers
 -------------
@@ -40,6 +40,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from langgraph.graph import END, START, StateGraph
@@ -56,6 +57,7 @@ from agents import (
     weather_agent,
 )
 from agents.metrics import compute_kpi_delta
+from agents.review_flags import max_retries, needs_human_review
 from memory.state import AgentFarmState, AgentTrace, initial_agent_farm_state
 from models.schemas import DemandPoint, Farm, Plan, Truck
 
@@ -103,21 +105,57 @@ async def merge_node(state: AgentFarmState) -> dict:  # noqa: ARG001
     return {}
 
 
-async def _bump_relaxation_node(state: AgentFarmState) -> dict:  # noqa: ARG001
-    """No-op pass-through before re-entering logistics on retry.
+async def _bump_relaxation_node(state: AgentFarmState) -> dict:
+    """Emit a trace before re-entering logistics on retry (observable retry loop)."""
+    from agents.validator import _demand_scale_for_retry, _relaxation_factor_applied
 
-    The logistics agent derives its own relaxation_factor from ``retry_count``
-    (which the validator already incremented), so no extra state mutation is
-    needed here.  The node exists for graph clarity and future extension.
-    """
-    return {}
+    retry = state.get("retry_count") or 0
+    demand_scale = _demand_scale_for_retry(retry)
+    relaxation = _relaxation_factor_applied(retry)
+    t0 = datetime.now(timezone.utc)
+
+    vr = state.get("validation_result")
+    violation_types: list[str] = []
+    if vr and not vr.valid:
+        for err in vr.errors or []:
+            tag = (err.split(":", 1)[0] or "").lower()
+            if tag == "capacity":
+                violation_types.append("capacity")
+            elif tag == "avail_window":
+                violation_types.append("time_window")
+            elif tag == "severe_weather":
+                violation_types.append("weather")
+            elif tag == "urgent_uncovered":
+                violation_types.append("spoilage_priority")
+            elif tag == "drive_time":
+                violation_types.append("driver_hours")
+        violation_types = list(dict.fromkeys(violation_types))
+
+    trace: AgentTrace = {
+        "agent_name": "retry_prep",
+        "start_time": t0.isoformat(),
+        "end_time": datetime.now(timezone.utc).isoformat(),
+        "tools_used": ["apply_constraint_relaxation"],
+        "execution_type": "deterministic retry coordinator",
+        "notes": (
+            f"retry_count={retry} demand_scale={demand_scale} "
+            f"relaxation_factor={relaxation}"
+        ),
+        "details": {
+            "retry_count": retry,
+            "relaxation_factor_applied": relaxation,
+            "demand_scale": demand_scale,
+            "reason_for_retry": violation_types,
+        },
+        "token_count": 0,
+    }
+    return {"agent_traces": [trace]}
 
 
 async def persist_node(state: AgentFarmState) -> dict:
     """Compute KPIs and store them in state; plan persistence is in orchestrator_exit."""
     kpis = compute_kpi_delta(state)
-    human_review = (state.get("retry_count") or 0) >= 2
-    return {"kpis": kpis, "human_review": human_review}
+    return {"kpis": kpis, "human_review": needs_human_review(state)}
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +168,7 @@ def _validate_router(state: AgentFarmState) -> str:
     retry = state.get("retry_count") or 0
     if vr and vr.valid:
         return "exit"
-    if retry < 2:
+    if retry < max_retries():
         return "retry_prep"
     return "exit"
 
@@ -142,7 +180,10 @@ def _validate_router(state: AgentFarmState) -> str:
 graph: StateGraph = StateGraph(AgentFarmState)
 
 graph.add_node("entry",     _make_node(_orchestrator_module.orchestrator_entry, ["run_id", "retry_count"], name="entry"))
-graph.add_node("weather",   _make_node(weather_agent,   ["weather_events", "weather_risk_summary"], name="weather"))
+graph.add_node(
+    "weather",
+    _make_node(weather_agent, ["weather_events", "weather_risk_summary", "weather_fetch_meta"], name="weather"),
+)
 graph.add_node("demand",    _make_node(demand_agent,    ["demand_forecast"], name="demand"))
 graph.add_node("merge",     merge_node)
 graph.add_node("inventory", _make_node(inventory_agent, ["at_risk_stock"], name="inventory"))
@@ -213,6 +254,10 @@ class PipelineResult:
     kpis: dict[str, float] = field(default_factory=dict)
     agent_traces: list[dict] = field(default_factory=list)
     human_review: bool = False
+    demand_forecast: dict[str, list[float]] = field(default_factory=dict)
+    at_risk_stock: list = field(default_factory=list)
+    weather_summary: dict = field(default_factory=dict)
+    weather_risk_summary: dict[str, str] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -238,10 +283,33 @@ async def run_scenario(request: PipelineRequest) -> PipelineResult:
     result: AgentFarmState = await compiled_graph.ainvoke(state)
     logger.info("run_scenario done run_id=%s traces=%d", run_id, len(result.get("agent_traces") or []))
 
+    at_risk = result.get("at_risk_stock") or []
+    weather_events = result.get("weather_events") or []
+    weather_risk = dict(result.get("weather_risk_summary") or {})
+    farms = result.get("farms") or request.farms
+
+    from tools.weather_summary import build_weather_summary
+
+    w_summary = build_weather_summary(
+        scenario_type=result.get("scenario_type") or request.scenario_type,
+        farms=farms,
+        weather_events=[
+            e.model_dump() if hasattr(e, "model_dump") else e for e in weather_events
+        ],
+        weather_risk_summary=weather_risk,
+        weather_fetch_meta=dict(result.get("weather_fetch_meta") or {}),
+    )
+
     return PipelineResult(
         run_id=result.get("run_id", run_id),
         plan=result.get("final_plan"),
         kpis=result.get("kpis") or {},
         agent_traces=list(result.get("agent_traces") or []),
         human_review=result.get("human_review", False),
+        demand_forecast=dict(result.get("demand_forecast") or {}),
+        at_risk_stock=[
+            s.model_dump() if hasattr(s, "model_dump") else s for s in at_risk
+        ],
+        weather_summary=w_summary,
+        weather_risk_summary=weather_risk,
     )
