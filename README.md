@@ -82,7 +82,7 @@ flowchart TB
 | **Weather** | Fetches forecasts per farm, classifies risk (normal / warning / severe). Falls back to synthetic if no API key. | No | OpenWeatherMap API (optional), Redis cache |
 | **Demand forecast** | 7-day demand per mandi; festival rules + optional LLM; bias correction from outcome store | Yes (optional) | Outcome store, LLM (OpenRouter / OpenAI) |
 | **Inventory** | Spoilage windows from crop and temperature; optional LLM for prioritisation | Yes (optional) | Temperature-adjusted shelf life |
-| **Logistics** | Capacitated VRP with distance limits; Haversine (×1.3) or Google Maps distance matrix | No | OR-Tools, distance matrix cache |
+| **Logistics** | Capacitated VRP with distance limits; road distance matrix via Google Maps API (optional) or Haversine ×1.3 fallback — OSRM recommended for production | No | OR-Tools, distance matrix cache |
 | **Validator** | Rule-based feasibility: capacity, availability, weather routes, driver hours, urgent coverage; triggers retry loop | No | Constraint checker |
 | **Farmer advisor** | Plain-language answers using the current plan; session history | Yes | LLM, plan DB, Redis session |
 
@@ -145,7 +145,7 @@ REDIS_URL=redis://redis:6379/0
 OPENAI_BASE_URL=https://openrouter.ai/api/v1
 ```
 
-> **No API key?** The demo still runs end-to-end. Weather uses scenario overlays when live weather is unavailable; Logistics uses Haversine distances without Google Maps. Demand and Inventory use rule-based logic. The Advisor answers from structured plan data when the LLM is unavailable.
+> **No API key?** The demo still runs end-to-end. Weather uses scenario overlays when live weather is unavailable; Logistics uses Haversine ×1.3 (no Google Maps key required). Demand and Inventory use rule-based logic. The Advisor answers from structured plan data when the LLM is unavailable.
 
 > **Live weather:** Set `OPENWEATHER_API_KEY` before `docker compose up` so the UI shows **Live (OpenWeather)** instead of simulated weather.
 
@@ -251,7 +251,7 @@ Frontend: **http://localhost:3000**
 | `OPENAI_API_KEY` | Recommended | — | OpenRouter or OpenAI key for LLM agents and advisor |
 | `OPENAI_BASE_URL` | No | `https://api.openai.com/v1` | Use `https://openrouter.ai/api/v1` for OpenRouter |
 | `OPENWEATHER_API_KEY` | No | — | Live weather; synthetic + scenario overlay without it |
-| `GOOGLE_MAPS_API_KEY` | No | — | Road distances; Haversine ×1.3 fallback without it |
+| `GOOGLE_MAPS_API_KEY` | No | — | Road distance matrix via Google Maps API (optional); Haversine ×1.3 fallback without it — OSRM recommended for production |
 | `DATABASE_URL` | Yes | see `.env.example` | PostgreSQL (asyncpg) |
 | `REDIS_URL` | Yes | see `.env.example` | Redis |
 | `VRP_TIME_LIMIT` | No | `30` | OR-Tools solver time limit (seconds) |
