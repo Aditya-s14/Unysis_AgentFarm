@@ -21,6 +21,12 @@ const OPTIONS = [
       'Baseline weather and routing; no scenario stress overlays on shelf life or distances.',
   },
   {
+    id: 'live_weather',
+    label: 'LIVE WEATHER',
+    description:
+      'Uses OpenWeather at each farm (no scripted rain/temp overlay). Shelf life and routing stress follow observed rain and temperature.',
+  },
+  {
     id: 'capacity_stress',
     label: 'VALIDATOR RETRY DEMO',
     description:
@@ -39,7 +45,7 @@ export default function ScenarioTypeSelect({ value, onChange }) {
       >
         Scenario Type
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
         {OPTIONS.map((opt) => {
           const isActive = value === opt.id;
           return (

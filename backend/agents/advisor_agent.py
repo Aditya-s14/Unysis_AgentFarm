@@ -48,12 +48,20 @@ async def _load_plan_row(run_id: str) -> object | None:
 async def _load_run_detail(run_id: str) -> dict[str, Any]:
     """Return plan_run_complete detail_json for run_id (KPIs + plan snapshot), or {}."""
     try:
+        from tools.weather_store import get_run_weather_snapshot
+
+        cached_weather = await get_run_weather_snapshot(run_id)
         from tools.db import list_run_logs_for_run
 
         logs = await list_run_logs_for_run(run_id)
         for log in reversed(logs):
             if log.message == "plan_run_complete" and log.detail_json:
-                return dict(log.detail_json)
+                detail = dict(log.detail_json)
+                if cached_weather and not detail.get("weather_snapshot"):
+                    detail["weather_snapshot"] = cached_weather
+                return detail
+        if cached_weather:
+            return {"weather_snapshot": cached_weather}
     except Exception as exc:  # noqa: BLE001
         logger.debug("advisor: run detail load failed run_id=%s: %s", run_id, exc)
     return {}
@@ -237,7 +245,33 @@ def _build_route_summary_lines(
     return lines
 
 
-def _format_weather_line(weather_summary: dict, weather_risk: dict[str, str]) -> str:
+def _format_weather_line(
+    weather_summary: dict,
+    weather_risk: dict[str, str],
+    weather_snapshot: dict | None = None,
+) -> str:
+    if weather_snapshot and weather_snapshot.get("farm_readings"):
+        src = weather_snapshot.get("weather_source") or "recorded"
+        fetched = weather_snapshot.get("fetched_at") or ""
+        parts = [f"OpenWeather ({src})"]
+        if fetched:
+            parts.append(f"fetched {fetched[:19]}Z")
+        summary = weather_snapshot.get("summary") or weather_summary
+        if summary.get("temperature_c") is not None:
+            parts.append(f"avg {summary['temperature_c']}°C")
+        if summary.get("rainfall_mm") is not None:
+            parts.append(f"max rain {summary['rainfall_mm']} mm")
+        if summary.get("risk_level"):
+            parts.append(f"risk {summary['risk_level']}")
+        elevated = [
+            r for r in weather_snapshot["farm_readings"]
+            if r.get("severity") in ("warning", "severe")
+        ]
+        if elevated:
+            names = [r.get("farm_name") or r.get("farm_id") for r in elevated[:5]]
+            parts.append(f"{len(elevated)} farms elevated: {', '.join(n for n in names if n)}")
+        return "; ".join(parts)
+
     if not weather_summary and not weather_risk:
         return "Not recorded for this run."
     parts: list[str] = []
@@ -266,6 +300,46 @@ def _format_weather_line(weather_summary: dict, weather_risk: dict[str, str]) ->
     return "; ".join(parts) if parts else "Weather data present (see run logs)."
 
 
+def _format_farm_weather_lines(
+    weather_snapshot: dict | None,
+    *,
+    limit: int = 12,
+) -> str:
+    """Compact per-farm OpenWeather lines for the advisor system prompt."""
+    if not weather_snapshot:
+        return "No per-farm weather readings stored for this run."
+    readings = weather_snapshot.get("farm_readings") or []
+    if not readings:
+        return "No per-farm weather readings stored for this run."
+
+    def _line(r: dict) -> str:
+        name = r.get("farm_name") or r.get("farm_id") or "?"
+        sev = r.get("severity") or "normal"
+        temp = r.get("temp_c")
+        rain = r.get("rain_mm")
+        bits = [f"{name} ({sev})"]
+        if temp is not None:
+            bits.append(f"{temp}°C")
+        if rain is not None:
+            bits.append(f"rain {rain} mm")
+        if r.get("humidity_pct") is not None:
+            bits.append(f"humidity {int(r['humidity_pct'])}%")
+        if r.get("wind_speed_ms") is not None:
+            bits.append(f"wind {r['wind_speed_ms']} m/s")
+        return ", ".join(bits)
+
+    sorted_readings = sorted(
+        readings,
+        key=lambda r: {"severe": 0, "warning": 1, "normal": 2}.get(
+            str(r.get("severity") or "normal"), 3
+        ),
+    )
+    lines = [_line(r) for r in sorted_readings[:limit]]
+    if len(readings) > limit:
+        lines.append(f"... and {len(readings) - limit} more farms")
+    return "; ".join(lines)
+
+
 def _build_system_prompt(
     run_id: str,
     farm_list: str,
@@ -273,6 +347,7 @@ def _build_system_prompt(
     route_summary: str,
     waste_reduction_pct: float | None,
     weather_line: str,
+    farm_weather_line: str,
     validation_line: str,
 ) -> str:
     waste_str = (
@@ -288,12 +363,14 @@ Current plan (run_id: {run_id}):
 Farms: {farm_list}
 Mandis: {mandi_list}
 Routes: {route_summary}
-Weather risk: {weather_line}
+Weather overview: {weather_line}
+Per-farm OpenWeather readings: {farm_weather_line}
 Validation: {validation_line}
 Waste reduction: {waste_str}
 
 Rules:
 - Always answer using the data above. Quote mandi/farm names and numbers from the plan.
+- For weather questions, use the per-farm OpenWeather readings (temperature, rain, severity) stored for this run.
 - Never say "I don't have the specific requirements" or "I don't have specific information" when the answer is in the data above.
 - If exact information is missing, say "This run does not contain X, but based on available data …" and use what you do have.
 - For shortage questions, compare Mandis by shortage_kg and fulfilment_pct from the list above."""
@@ -324,6 +401,9 @@ def _assemble_plan_context(
         demand_forecast = {}
     weather_summary = run_detail.get("weather_summary") or {}
     weather_risk = run_detail.get("weather_risk_summary") or {}
+    weather_snapshot = run_detail.get("weather_snapshot") or {}
+    if not weather_snapshot.get("farm_readings") and weather_summary:
+        weather_snapshot = {"summary": weather_summary, "farm_readings": []}
 
     farm_lines = _build_farm_lines(at_risk_stock, farm_names, routes)
     mandi_rows = _build_mandi_rows(dp_info, routes, at_risk_stock, demand_forecast)
@@ -356,7 +436,8 @@ def _assemble_plan_context(
     farm_list = "; ".join(farm_lines) if farm_lines else "none listed"
     mandi_list = "; ".join(mandi_lines) if mandi_lines else "none listed"
     route_summary = "; ".join(route_lines) if route_lines else "no routes in plan"
-    weather_line = _format_weather_line(weather_summary, weather_risk)
+    weather_line = _format_weather_line(weather_summary, weather_risk, weather_snapshot)
+    farm_weather_line = _format_farm_weather_lines(weather_snapshot)
 
     system_prompt = _build_system_prompt(
         run_id=run_id,
@@ -365,6 +446,7 @@ def _assemble_plan_context(
         route_summary=route_summary,
         waste_reduction_pct=waste_reduction,
         weather_line=weather_line,
+        farm_weather_line=farm_weather_line,
         validation_line=validation_line,
     )
 
@@ -374,12 +456,50 @@ def _assemble_plan_context(
         "farm_lines": farm_lines,
         "route_lines": route_lines,
         "waste_reduction_pct": waste_reduction,
+        "weather_snapshot": weather_snapshot,
     }
 
 
 def _try_rule_based_answer(question: str, ctx: dict[str, Any]) -> str | None:
     """Answer common questions from structured context when LLM is unavailable."""
     q = question.lower()
+    weather_snapshot: dict = ctx.get("weather_snapshot") or {}
+    readings: list[dict] = weather_snapshot.get("farm_readings") or []
+
+    if readings and re.search(
+        r"\b(weather|rain|rainfall|temperature|temp|heat|humidity|wind|forecast)\b",
+        q,
+    ):
+        if re.search(r"\b(severe|worst|highest risk|dangerous)\b", q):
+            bad = [r for r in readings if r.get("severity") in ("severe", "warning")]
+            if bad:
+                top = sorted(
+                    bad,
+                    key=lambda r: {"severe": 0, "warning": 1}.get(str(r.get("severity")), 2),
+                )[:3]
+                names = ", ".join(
+                    f"{r.get('farm_name', r.get('farm_id'))} ({r.get('temp_c')}°C, rain {r.get('rain_mm')} mm, {r.get('severity')})"
+                    for r in top
+                )
+                return (
+                    f"From the OpenWeather readings stored for this run, the highest-risk farms are: {names}."
+                )
+        if re.search(r"\b(rain|rainfall|wet)\b", q):
+            wet = sorted(readings, key=lambda r: float(r.get("rain_mm") or 0), reverse=True)[:3]
+            if wet and float(wet[0].get("rain_mm") or 0) > 0:
+                names = ", ".join(
+                    f"{r.get('farm_name', r.get('farm_id'))} ({r.get('rain_mm')} mm)"
+                    for r in wet
+                )
+                return f"Heaviest rain in the stored OpenWeather data: {names}."
+        if re.search(r"\b(hot|heat|temperature|temp)\b", q):
+            hot = sorted(readings, key=lambda r: float(r.get("temp_c") or 0), reverse=True)[:3]
+            names = ", ".join(
+                f"{r.get('farm_name', r.get('farm_id'))} ({r.get('temp_c')}°C)"
+                for r in hot
+            )
+            return f"Warmest farms in the stored OpenWeather readings: {names}."
+
     mandi_rows: list[dict] = ctx.get("mandi_rows") or []
     if not mandi_rows:
         return None

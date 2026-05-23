@@ -71,6 +71,7 @@ class RunScenarioResponse(BaseModel):
     at_risk_stock: list[dict[str, Any]] = Field(default_factory=list)
     weather_summary: dict[str, Any] = Field(default_factory=dict)
     weather_risk_summary: dict[str, str] = Field(default_factory=dict)
+    weather_snapshot: dict[str, Any] = Field(default_factory=dict)
 
 
 @router.post("/scenario/run", response_model=RunScenarioResponse)
@@ -94,6 +95,7 @@ async def run_scenario_endpoint(body: RunScenarioRequest) -> RunScenarioResponse
             at_risk_stock=result.at_risk_stock,
             weather_summary=result.weather_summary,
             weather_risk_summary=result.weather_risk_summary,
+            weather_snapshot=result.weather_snapshot,
         )
     except Exception as exc:
         logger.exception("POST /api/scenario/run failed")

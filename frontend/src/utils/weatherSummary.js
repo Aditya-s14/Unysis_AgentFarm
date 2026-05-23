@@ -41,7 +41,13 @@ export function getWeatherSourceMode(data) {
 
 export function weatherSourceTooltip(data) {
   const mode = getWeatherSourceMode(data);
-  if (mode === 'live') return 'Temperature and rainfall from OpenWeatherMap current + forecast APIs.';
+  if (mode === 'live') {
+    const scenario = (data.scenario_type || '').toLowerCase();
+    if (scenario === 'live_weather') {
+      return 'Per-farm OpenWeather readings drive risk, shelf life, and routing — no scripted overlay.';
+    }
+    return 'Temperature and rainfall from OpenWeatherMap current + forecast APIs.';
+  }
   if (mode === 'mixed') {
     return (
       'Live OpenWeather readings with scenario overlay applied for the selected scenario type. '
@@ -66,6 +72,9 @@ export function weatherHeadline(data) {
   const scenarioLabel = scenarioRaw ? scenarioRaw.replace(/_/g, ' ') : '—';
 
   if (src === 'openweather') {
+    if (scenarioRaw === 'live_weather') {
+      return `Live weather: ${condition}`;
+    }
     return `Live: ${condition}`;
   }
   if (src === 'synthetic_fallback') {
@@ -101,6 +110,7 @@ export function conditionLabel(condition) {
     sunny: 'Sunny',
     rain: 'Rain',
     heat_wave: 'Heat wave',
+    live_weather: 'Live conditions',
   };
   return map[condition] || String(condition);
 }

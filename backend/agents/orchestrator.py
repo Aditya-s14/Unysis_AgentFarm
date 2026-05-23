@@ -131,6 +131,24 @@ async def orchestrator_exit(state: AgentFarmState) -> AgentFarmState:
         )
         plan_id = str(plan_row.id)
 
+        from tools.scenario_effects import coerce_weather_events
+        from tools.weather_store import save_run_weather_snapshot
+        from tools.weather_summary import build_weather_snapshot
+
+        farms = state.get("farms") or []
+        weather_events = coerce_weather_events(state.get("weather_events") or [])
+        weather_risk = dict(state.get("weather_risk_summary") or {})
+        weather_meta = dict(state.get("weather_fetch_meta") or {})
+        weather_snapshot = build_weather_snapshot(
+            run_id=run_id,
+            scenario_type=state.get("scenario_type") or "normal",
+            farms=farms,
+            weather_events=weather_events,
+            weather_risk_summary=weather_risk,
+            weather_fetch_meta=weather_meta,
+        )
+        await save_run_weather_snapshot(run_id, weather_snapshot)
+
         at_risk_raw = state.get("at_risk_stock") or []
         kpi_detail = {
             **kpi,
@@ -139,8 +157,9 @@ async def orchestrator_exit(state: AgentFarmState) -> AgentFarmState:
             "at_risk_stock": [
                 s.model_dump() if hasattr(s, "model_dump") else s for s in at_risk_raw
             ],
-            "weather_summary": dict(state.get("weather_summary") or {}),
-            "weather_risk_summary": dict(state.get("weather_risk_summary") or {}),
+            "weather_snapshot": weather_snapshot,
+            "weather_summary": dict(weather_snapshot.get("summary") or {}),
+            "weather_risk_summary": weather_risk,
             "demand_forecast": dict(state.get("demand_forecast") or {}),
         }
         if human_review_needed:

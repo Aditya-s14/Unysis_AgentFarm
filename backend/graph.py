@@ -258,6 +258,7 @@ class PipelineResult:
     at_risk_stock: list = field(default_factory=list)
     weather_summary: dict = field(default_factory=dict)
     weather_risk_summary: dict[str, str] = field(default_factory=dict)
+    weather_snapshot: dict = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -284,24 +285,41 @@ async def run_scenario(request: PipelineRequest) -> PipelineResult:
     logger.info("run_scenario done run_id=%s traces=%d", run_id, len(result.get("agent_traces") or []))
 
     at_risk = result.get("at_risk_stock") or []
-    weather_events = result.get("weather_events") or []
+    from tools.scenario_effects import coerce_weather_events
+    from tools.weather_store import save_run_weather_snapshot
+    from tools.weather_summary import build_weather_snapshot, build_weather_summary
+
+    weather_events_raw = result.get("weather_events") or []
+    weather_events = coerce_weather_events(weather_events_raw)
     weather_risk = dict(result.get("weather_risk_summary") or {})
+    weather_meta = dict(result.get("weather_fetch_meta") or {})
     farms = result.get("farms") or request.farms
+    scenario = result.get("scenario_type") or request.scenario_type
+    final_run_id = result.get("run_id", run_id)
 
-    from tools.weather_summary import build_weather_summary
+    w_snapshot = build_weather_snapshot(
+        run_id=final_run_id,
+        scenario_type=scenario,
+        farms=farms,
+        weather_events=weather_events,
+        weather_risk_summary=weather_risk,
+        weather_fetch_meta=weather_meta,
+    )
+    await save_run_weather_snapshot(final_run_id, w_snapshot)
 
-    w_summary = build_weather_summary(
-        scenario_type=result.get("scenario_type") or request.scenario_type,
+    w_summary = w_snapshot.get("summary") or build_weather_summary(
+        scenario_type=scenario,
         farms=farms,
         weather_events=[
-            e.model_dump() if hasattr(e, "model_dump") else e for e in weather_events
+            e.model_dump(mode="json") if hasattr(e, "model_dump") else e
+            for e in weather_events
         ],
         weather_risk_summary=weather_risk,
-        weather_fetch_meta=dict(result.get("weather_fetch_meta") or {}),
+        weather_fetch_meta=weather_meta,
     )
 
     return PipelineResult(
-        run_id=result.get("run_id", run_id),
+        run_id=final_run_id,
         plan=result.get("final_plan"),
         kpis=result.get("kpis") or {},
         agent_traces=list(result.get("agent_traces") or []),
@@ -312,4 +330,5 @@ async def run_scenario(request: PipelineRequest) -> PipelineResult:
         ],
         weather_summary=w_summary,
         weather_risk_summary=weather_risk,
+        weather_snapshot=w_snapshot,
     )

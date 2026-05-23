@@ -68,7 +68,7 @@ flowchart TB
   ADV --> RD
 ```
 
-**How it works:** The orchestrator validates inputs and loads run context. Weather and Demand run **in parallel** (fan-out), then Inventory and Logistics build an optimized plan. The Validator applies rule-based feasibility checks; on failure, Logistics re-solves with relaxed demand (up to two retries). The orchestrator exit packages the plan and KPIs vs a naive baseline. The **Farmer Advisor** is a separate service that reads finished plans from Postgres and answers follow-up questions with optional LLM + Redis session history.
+**How it works:** The orchestrator validates inputs and loads run context. Weather and Demand run **in parallel** (fan-out), then Inventory and Logistics build an optimized plan. The Validator applies rule-based feasibility checks; on failure, Logistics re-solves with relaxed demand (up to two retries). The orchestrator exit packages the plan, KPIs vs a naive baseline, and a **weather snapshot** (per-farm OpenWeather readings in Postgres + Redis). The **Farmer Advisor** is a separate service that reads finished plans and stored weather from Postgres/Redis and answers follow-up questions with optional LLM + Redis session history.
 
 > **Note:** OR-Tools solves a **capacitated VRP** with per-route distance limits. Truck availability and timing-style checks run in the **Validator** after solving—not as OR-Tools time-window dimensions.
 
@@ -79,12 +79,14 @@ flowchart TB
 | Agent | Role | LLM? | Primary tools |
 |-------|------|------|----------------|
 | **Orchestrator** | Validates inputs, resolves conflicts, packages final plan | No | LangGraph state graph |
-| **Weather** | Fetches forecasts per farm, classifies risk (normal / warning / severe). Falls back to synthetic if no API key. | No | OpenWeatherMap API (optional), Redis cache |
+| **Weather** | Fetches OpenWeather current + 24h forecast **per farm** (not mandis), classifies risk (normal / warning / severe). Falls back to synthetic scenario overlays if no API key. | No | OpenWeatherMap API (optional), Redis cache |
 | **Demand forecast** | 7-day demand per mandi; festival rules + optional LLM; bias correction from outcome store | Yes (optional) | Outcome store, LLM (OpenRouter / OpenAI) |
 | **Inventory** | Spoilage windows from crop and temperature; optional LLM for prioritisation | Yes (optional) | Temperature-adjusted shelf life |
 | **Logistics** | Capacitated VRP with distance limits; Haversine (×1.3) or Google Maps distance matrix | No | OR-Tools, distance matrix cache |
 | **Validator** | Rule-based feasibility: capacity, availability, weather routes, driver hours, urgent coverage; triggers retry loop | No | Constraint checker |
-| **Farmer advisor** | Plain-language answers using the current plan; session history | Yes | LLM, plan DB, Redis session |
+| **Farmer advisor** | Plain-language answers using the current plan and stored per-farm weather; session history | Yes | LLM, plan DB, weather snapshot (Postgres + Redis), Redis session |
+
+> **Weather scope:** OpenWeather is queried at each **farm** coordinate (20 in the demo fixture). **Mandis / demand points** (10 in the demo) do not get separate weather API calls; they are affected indirectly via farm risk, routing, and demand adjustments.
 
 LLM agents work without API keys via rule-based fallbacks. For the best demo, provide an **OpenRouter** or **OpenAI** key.
 
@@ -104,11 +106,23 @@ LLM agents work without API keys via rule-based fallbacks. For the best demo, pr
 
 > Stack must be running first — see [Quick Start](#quick-start) below.
 
+### Scenario types
+
+| Scenario | What it does |
+|----------|----------------|
+| **Monsoon Disruption** | Scripted heavy rain in high-risk farm zones; shelf life −20%; road legs ×1.3 |
+| **Heat Wave** | Scripted temps ≥39°C; shelf life −40%; morning-delivery route bias |
+| **Normal Day** | Baseline — no scenario stress overlays on shelf life or distances |
+| **Live Weather** | OpenWeather at each farm (no scripted rain/temp overlay); stress derived from observed readings |
+| **Validator Retry Demo** | Undersized truck fleet triggers validator retry loop (weather = Normal Day) |
+
+### Walkthrough
+
 1. Open **http://localhost:3000/scenario**
-2. Select **Monsoon Disruption** → click **RUN SCENARIO →**
+2. Pick a scenario — e.g. **Monsoon Disruption** for a scripted stress test, or **Live Weather** when `OPENWEATHER_API_KEY` is set → click **RUN SCENARIO →**
 3. Watch **6 agent roles** execute live (Weather → Demand → Inventory → Logistics → Validator → Orchestrator) — typically ~35–90 seconds for the 20-farm demo fixture
-4. Click **View Dashboard →** → check KPI cards (waste reduction vs naive baseline; typical range **20–60%** depending on scenario and seed data), map with truck routes
-5. Switch tabs: **FARMER** (spoilage warnings), **MANDI** (incoming supply vs demand), **TRANSPORT** (truck assignments) → open **Advisor** → ask a question about the **current plan** (e.g. mandi shortages or at-risk farms)
+4. Click **View Dashboard →** → check KPI cards (waste reduction vs naive baseline; typical range **20–60%** depending on scenario and seed data), map with truck routes, and the weather panel (**Live** vs simulated)
+5. Switch tabs: **FARMER** (spoilage warnings), **MANDI** (incoming supply vs demand), **TRANSPORT** (truck assignments) → open **Advisor** → ask about the plan (e.g. mandi shortages, at-risk farms, or **weather**: “Which farms have the worst rain?”, “Where is it hottest?”)
 
 ---
 
@@ -147,7 +161,7 @@ OPENAI_BASE_URL=https://openrouter.ai/api/v1
 
 > **No API key?** The demo still runs end-to-end. Weather uses scenario overlays when live weather is unavailable; Logistics uses Haversine distances without Google Maps. Demand and Inventory use rule-based logic. The Advisor answers from structured plan data when the LLM is unavailable.
 
-> **Live weather:** Set `OPENWEATHER_API_KEY` before `docker compose up` so the UI shows **Live (OpenWeather)** instead of simulated weather.
+> **Live weather:** Set `OPENWEATHER_API_KEY` before `docker compose up` so the UI shows **Live (OpenWeather)** instead of simulated weather. On the scenario page, choose **Live Weather** to drive the pipeline from real-time readings at each farm (no scripted rain/temp overlay).
 
 ### 2 — Start all services
 
@@ -164,7 +178,7 @@ The backend installs from a **locked** `backend/requirements.txt` (generated fro
 | `agentfarm_frontend` | 3000 | Next.js UI |
 | `agentfarm_backend` | 8000 | FastAPI + LangGraph pipeline |
 | `agentfarm_postgres` | 5432 | Plans + outcome history |
-| `agentfarm_redis` | 6379 | Weather / distance cache + advisor sessions |
+| `agentfarm_redis` | 6379 | OpenWeather coordinate cache, per-run weather snapshots, distance cache, advisor sessions |
 
 Wait ~30 seconds after containers are **Up** for the database to seed, then open **http://localhost:3000**.
 
@@ -180,12 +194,16 @@ curl http://localhost:8000/health
 open http://localhost:8000/docs
 ```
 
-### 4 — Stop the stack
+### 4 — Stop or restart the stack
 
 ```bash
-docker compose down          # stop containers, keep data
-docker compose down -v       # stop and wipe volumes (fresh start)
+docker compose restart          # restart all services
+docker compose restart backend  # reload backend code (no auto-reload in Docker)
+docker compose down             # stop containers, keep data
+docker compose down -v          # stop and wipe volumes (fresh start)
 ```
+
+> **Port 8000:** Do not run Docker `backend` and local `uvicorn` on port 8000 at the same time — only one can bind the port. Use either Docker backend **or** `uvicorn main:app --reload` from `backend/`, not both.
 
 ---
 
@@ -264,12 +282,15 @@ Frontend: **http://localhost:3000**
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/scenario/run` | Run full scenario → plan, KPIs, agent traces |
+| `POST` | `/api/scenario/run` | Run full scenario → plan, KPIs, agent traces, `weather_summary`, `weather_snapshot` |
 | `GET` | `/api/run/{runId}` | Fetch persisted plan and summary |
 | `GET` | `/api/run/{runId}/traces` | Per-agent traces, tools, timings, tokens |
-| `POST` | `/api/advisor/query` | Ask the advisor about a finished plan |
+| `GET` | `/api/run/{runId}/weather` | Stored OpenWeather snapshot for a run (Redis, then Postgres `run_logs`) |
+| `POST` | `/api/advisor/query` | Ask the advisor about a finished plan (includes stored per-farm weather) |
 | `POST` | `/api/outcome/log` | Log outcomes (feeds cross-run learning) |
 | `GET` | `/health` | Liveness probe |
+
+**`weather_snapshot`** (returned by scenario run and persisted per run) includes: fetch time, weather source, aggregate summary, and **per-farm readings** (temp, rain, humidity, wind, severity). Cached in Redis (`weather_run:{run_id}`, 7-day TTL) and in Postgres `run_logs.detail_json`.
 
 Interactive docs: **http://localhost:8000/docs**
 
@@ -283,7 +304,8 @@ Unysis_AgentFarm/
 │   ├── agents/            # weather, demand, inventory, logistics,
 │   │                      #   validator, orchestrator, advisor
 │   ├── memory/            # LangGraph state (T1), outcome store (T2), sessions (T3)
-│   ├── tools/             # weather_api, maps_api, vrp_solver, db
+│   ├── tools/             # weather_api, weather_summary, weather_store,
+│   │                      #   maps_api, vrp_solver, db
 │   ├── models/            # Pydantic schemas + SQLAlchemy ORM
 │   ├── routes/            # scenario, run, advisor
 │   ├── graph.py           # LangGraph StateGraph
@@ -337,7 +359,17 @@ docker compose exec backend env | grep OPENAI
 Uses OpenStreetMap tiles (needs internet). Markers and route polylines still render without tiles.
 
 **Port already in use**  
-Change host ports in `docker-compose.yml` (e.g. `"3001:3000"` for the frontend).
+Change host ports in `docker-compose.yml` (e.g. `"3001:3000"` for the frontend). Common conflicts:
+
+- **8000** — Docker backend vs local `uvicorn` (pick one)
+- **3000** — Docker frontend vs `npm run dev` (pick one)
+
+**Backend code changes not reflected in Docker**  
+Docker does not auto-reload Python like `uvicorn --reload`. After editing backend code:
+
+```bash
+docker compose restart backend
+```
 
 ---
 

@@ -21,6 +21,7 @@ from config import get_settings
 from models.schemas import Farm, WeatherEvent
 from tools.scenario_effects import (
     HEAT,
+    LIVE,
     MONSOON,
     NORMAL,
     is_monsoon_high_risk_farm,
@@ -57,6 +58,8 @@ def _cache_key(lat: float, lng: float, endpoint: str) -> str:
 
 
 def _scenario_adjustment_label(scenario: str) -> str | None:
+    if scenario == LIVE:
+        return None
     if scenario == HEAT:
         return "Heat wave overlay (temp ≥39°C)"
     if scenario == MONSOON:
@@ -73,6 +76,9 @@ def _apply_scenario_readings(
     scenario_type: str,
 ) -> tuple[float, float]:
     st = normalize_scenario_type(scenario_type)
+
+    if st == LIVE:
+        return max_rain_mm, max_temp_c
 
     if st == NORMAL:
         return 0.0, _NORMAL_TEMP_C
@@ -125,6 +131,17 @@ def _classify_risk(
         return severity, (
             f"monsoon_disruption; zone={zone}; rain={max_rain_mm:.1f}mm; "
             f"temp={max_temp_c:.1f}C; risk={severity}"
+        )
+
+    if st == LIVE:
+        if max_temp_c >= 40.0 or max_rain_mm > 50.0:
+            severity = "severe"
+        elif max_temp_c >= 38.0 or max_rain_mm > 20.0:
+            severity = "warning"
+        else:
+            severity = "normal"
+        return severity, (
+            f"live_weather; rain={max_rain_mm:.1f}mm; temp={max_temp_c:.1f}C; risk={severity}"
         )
 
     if max_rain_mm > 50:
@@ -351,6 +368,7 @@ def _aggregate_farm_meta(farm_meta: list[dict[str, Any]], scenario: str) -> dict
     if w is not None:
         meta["wind_speed_ms"] = round(w, 1)
 
+    meta["farm_readings"] = farm_meta
     return meta
 
 
@@ -384,6 +402,10 @@ async def fetch_weather(
             }
             for f, e in zip(farms, events)
         ]
+        for fm, event in zip(farm_meta, events):
+            fm["severity"] = event.severity
+            fm["description"] = event.description
+            fm["precipitation_mm"] = float(event.precipitation_mm or 0)
         meta = _aggregate_farm_meta(farm_meta, st)
         meta["synthetic_reason"] = "OPENWEATHER_API_KEY is not configured"
         return {"events": events, "meta": meta}
@@ -413,11 +435,19 @@ async def fetch_weather(
             }
             for f, e in zip(farms, events)
         ]
+        for fm, event in zip(farm_meta, events):
+            fm["severity"] = event.severity
+            fm["description"] = event.description
+            fm["precipitation_mm"] = float(event.precipitation_mm or 0)
         meta = _aggregate_farm_meta(farm_meta, st)
         meta["synthetic_reason"] = f"Unexpected fetch error: {exc}"
         return {"events": events, "meta": meta}
 
     events = [p[0] for p in pairs]
     farm_meta = [p[1] for p in pairs]
+    for fm, event in zip(farm_meta, events):
+        fm["severity"] = event.severity
+        fm["description"] = event.description
+        fm["precipitation_mm"] = float(event.precipitation_mm or 0)
     meta = _aggregate_farm_meta(farm_meta, st)
     return {"events": events, "meta": meta}

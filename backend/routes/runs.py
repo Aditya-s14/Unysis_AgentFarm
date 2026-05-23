@@ -27,6 +27,28 @@ async def get_run(run_id: str) -> dict:
     }
 
 
+@router.get("/run/{run_id}/weather")
+async def get_run_weather(run_id: str) -> dict:
+    """Return stored OpenWeather snapshot for a pipeline run (Redis, then Postgres)."""
+    from tools.weather_store import get_run_weather_snapshot
+
+    cached = await get_run_weather_snapshot(run_id)
+    if cached:
+        return cached
+
+    rows = await list_run_logs_for_run(run_id)
+    for row in reversed(rows):
+        detail = row.detail_json or {}
+        snapshot = detail.get("weather_snapshot")
+        if isinstance(snapshot, dict) and snapshot:
+            return snapshot
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Weather snapshot for run {run_id!r} not found",
+    )
+
+
 @router.get("/run/{run_id}/traces")
 async def get_run_traces(run_id: str) -> list:
     """Return agent traces for a pipeline run.

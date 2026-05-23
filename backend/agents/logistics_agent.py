@@ -26,11 +26,15 @@ from memory.outcome_store import get_route_history
 from memory.state import AgentFarmState, AgentTrace
 from models.schemas import Route, RoutePlan
 from tools.maps_api import get_distance_matrix
+from models.schemas import WeatherEvent
 from tools.scenario_effects import (
     HEAT,
+    LIVE,
     MONSOON,
     apply_heat_wave_morning_bias,
+    apply_live_weather_matrix,
     apply_monsoon_distance_matrix,
+    coerce_weather_events,
     normalize_scenario_type,
     scenario_adjustment_details,
 )
@@ -104,6 +108,7 @@ async def _solve_region(
     demand_scale: float,
     time_factor: float,
     scenario_type: str,
+    event_by_farm: dict[str, WeatherEvent] | None = None,
 ) -> RoutePlan:
     dep_lat = sum(f.lat for f in region_farms) / len(region_farms)
     dep_lng = sum(f.lng for f in region_farms) / len(region_farms)
@@ -117,7 +122,13 @@ async def _solve_region(
         matrix = [[cell * time_factor for cell in row] for row in matrix]
 
     st = normalize_scenario_type(scenario_type)
-    if st == MONSOON:
+    if st == LIVE and event_by_farm:
+        region_events = [
+            event_by_farm[f.id] for f in region_farms if f.id in event_by_farm
+        ]
+        if region_events:
+            matrix = apply_live_weather_matrix(matrix, region_farms, region_events)
+    elif st == MONSOON:
         matrix = apply_monsoon_distance_matrix(matrix, region_farms)
     elif st == HEAT:
         risk_hours = {
@@ -170,6 +181,10 @@ async def run(state: AgentFarmState) -> AgentFarmState:
         return state
 
     time_factor = await _route_history_factor()
+    weather_events = coerce_weather_events(state.get("weather_events") or [])
+    event_by_farm: dict[str, WeatherEvent] = {
+        farm.id: event for farm, event in zip(farms, weather_events)
+    }
     regions = _geo_regions(farms, demand_points)
     farm_counts = [len(rf) for rf, _ in regions]
     total_farms = sum(farm_counts) or 1
@@ -194,6 +209,7 @@ async def run(state: AgentFarmState) -> AgentFarmState:
             demand_scale,
             time_factor,
             scenario_type,
+            event_by_farm,
         )
         merged_routes.extend(region_plan.routes)
         if region_plan.objective_value:

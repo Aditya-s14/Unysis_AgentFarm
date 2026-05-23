@@ -49,9 +49,13 @@ from collections import defaultdict
 
 from memory.state import AgentFarmState
 from models.schemas import AtRiskStock, DemandPoint, Farm
+from models.schemas import WeatherEvent
 from tools.scenario_effects import (
     HEAT,
+    LIVE,
     MONSOON,
+    coerce_weather_events,
+    live_stress_kind_from_event,
     market_absorption_factor,
     naive_coordination_penalty,
     normalize_scenario_type,
@@ -212,6 +216,7 @@ def _additional_spoilage_waste(
     at_risk: list[AtRiskStock],
     farm_to_dp: dict[str, str],
     scenario_type: str,
+    event_by_farm: dict[str, WeatherEvent] | None = None,
 ) -> float:
     """Extra optimized waste from scenario-driven spoilage on unrouted urgent stock."""
     st = normalize_scenario_type(scenario_type)
@@ -220,10 +225,13 @@ def _additional_spoilage_waste(
         if stock.farm_id in farm_to_dp:
             continue
         hours = stock.hours_until_spoilage or 999.0
-        if st == HEAT and hours < 36.0:
+        stress = st
+        if st == LIVE and event_by_farm:
+            stress = live_stress_kind_from_event(event_by_farm.get(stock.farm_id))
+        if stress == HEAT and hours < 36.0:
             urgency = max(0.0, (36.0 - hours) / 36.0)
             extra += stock.kg_at_risk * urgency * 0.08
-        elif st == MONSOON and hours < 48.0:
+        elif stress == MONSOON and hours < 48.0:
             extra += stock.kg_at_risk * 0.05
     return extra
 
@@ -257,7 +265,9 @@ def compute_kpi_delta(state: AgentFarmState) -> dict[str, float]:
     retry = state.get("retry_count") or 0
 
     scenario_type = normalize_scenario_type(state.get("scenario_type", ""))
-    absorption = market_absorption_factor(scenario_type)
+    weather_events = coerce_weather_events(state.get("weather_events") or [])
+    w_events = list(weather_events) if weather_events else None
+    absorption = market_absorption_factor(scenario_type, events=w_events)
     dp_daily_demand: dict[str, float] = {
         dp.id: dp.base_demand_per_day * absorption for dp in demand_points
     }
@@ -266,14 +276,19 @@ def compute_kpi_delta(state: AgentFarmState) -> dict[str, float]:
     naive_map = _naive_farm_to_dp(at_risk, farms, demand_points)
     naive_waste_kg, total_kg = _demand_matching_waste(at_risk, naive_map, dp_daily_demand)
     naive_waste_kg *= naive_coordination_penalty(
-        scenario_type, at_risk_count=len(at_risk),
+        scenario_type, at_risk_count=len(at_risk), events=w_events,
     )
 
     # --- Optimised: use actual VRP assignments ---
     opt_map = _routed_farm_to_dp(state, farms, demand_points)
     # Farms absent from VRP routes count as fully wasted (no market reached)
     opt_waste_kg, _ = _demand_matching_waste(at_risk, opt_map, dp_daily_demand)
-    opt_waste_kg += _additional_spoilage_waste(at_risk, opt_map, scenario_type)
+    event_by_farm = {
+        farm.id: event for farm, event in zip(farms, weather_events)
+    }
+    opt_waste_kg += _additional_spoilage_waste(
+        at_risk, opt_map, scenario_type, event_by_farm,
+    )
 
     # --- Route-level stats (coverage, urgency) ---
     visited = set(opt_map.keys())
