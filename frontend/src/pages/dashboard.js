@@ -10,11 +10,10 @@ import WeatherRiskPanel from '@/components/Dashboard/WeatherRiskPanel';
 import KPIGrid from '@/components/KPICards/KPIGrid';
 import { resolveWeatherPanel } from '@/utils/weatherSummary';
 import MapView from '@/components/Map/MapView';
-import AgentTrace from '@/components/PlanViewer/AgentTrace';
 import TruckCard from '@/components/Transport/TruckCard';
 import { displayTruckId } from '@/utils/truckDisplay';
 import { EM_DASH, MIDDOT, SECTION, WARN } from '@/utils/uiChars';
-import useRuns, { useCachedRunResponse, useRunTraces } from '@/hooks/useRuns';
+import useRuns, { useCachedRunResponse } from '@/hooks/useRuns';
 import { useAppContext } from '@/context/AppContext';
 import {
   DEMO_MAP_FARMS,
@@ -112,7 +111,6 @@ export default function DashboardPage() {
   const cached     = useCachedRunResponse();
   const { currentRunId } = useAppContext();
   const runId      = cached?.run_id || currentRunId || null;
-  const { data: freshTraces } = useRunTraces(runId);
   const [activeTab, setActiveTab]           = useState('overview');
   const [selectedTruckId, setSelectedTruckId] = useState(null);
   const [farmerFilters, setFarmerFilters] = useState({
@@ -136,7 +134,6 @@ export default function DashboardPage() {
   };
 
   const kpis   = cached?.kpis;
-  const traces = (Array.isArray(freshTraces) && freshTraces.length) ? freshTraces : cached?.agent_traces;
 
   const routesForMap = useMemo(() => {
     const routes = cached?.plan?.route_plan?.routes || [];
@@ -367,43 +364,38 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                <section className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2">
-                    <SectionCard
-                      title="▸ Optimised Routes"
-                      badge={
-                        selectedTruckId
-                          ? `SHOWING: ${displayTruckId(selectedTruckId)}`
-                          : `${routesForMap.length} ROUTES · ${DEMO_MAP_FARMS.length} FARMS · ${DEMO_MAP_MANDIS.length} MANDIS`
-                      }
-                    >
-                      <div className="px-4 pt-4">
-                        <RouteFilterBar
-                          truckIds={routeTruckIds}
-                          selectedTruckId={selectedTruckId}
-                          onSelect={setSelectedTruckId}
-                        />
-                      </div>
-                      {selectedTruckId && (
-                        <RouteSummaryPanel
-                          truckId={selectedTruckId}
-                          rawRoutes={rawRoutes}
-                          atRiskMap={atRiskMap}
-                        />
-                      )}
-                      <div ref={mapPanelRef}>
-                        <MapView
-                          farms={DEMO_MAP_FARMS}
-                          demandPoints={DEMO_MAP_MANDIS}
-                          routes={routesForMap}
-                          selectedTruckId={selectedTruckId}
-                        />
-                      </div>
-                    </SectionCard>
-                  </div>
-                  <div className="lg:col-span-1">
-                    <AgentTrace traces={traces} />
-                  </div>
+                <section className="mt-6">
+                  <SectionCard
+                    title="▸ Optimised Routes"
+                    badge={
+                      selectedTruckId
+                        ? `SHOWING: ${displayTruckId(selectedTruckId)}`
+                        : `${routesForMap.length} ROUTES · ${DEMO_MAP_FARMS.length} FARMS · ${DEMO_MAP_MANDIS.length} MANDIS`
+                    }
+                  >
+                    <div className="px-4 pt-4">
+                      <RouteFilterBar
+                        truckIds={routeTruckIds}
+                        selectedTruckId={selectedTruckId}
+                        onSelect={setSelectedTruckId}
+                      />
+                    </div>
+                    {selectedTruckId && (
+                      <RouteSummaryPanel
+                        truckId={selectedTruckId}
+                        rawRoutes={rawRoutes}
+                        atRiskMap={atRiskMap}
+                      />
+                    )}
+                    <div ref={mapPanelRef}>
+                      <MapView
+                        farms={DEMO_MAP_FARMS}
+                        demandPoints={DEMO_MAP_MANDIS}
+                        routes={routesForMap}
+                        selectedTruckId={selectedTruckId}
+                      />
+                    </div>
+                  </SectionCard>
                 </section>
               </>
             )}
@@ -837,7 +829,7 @@ function EmptyState() {
       <Link href="/scenario" className="text-accent hover:underline tracking-wider-2">
         RUN A SCENARIO
       </Link>{' '}
-      to populate KPIs, routes, and traces.
+      to populate KPIs and routes.
     </div>
   );
 }

@@ -1,5 +1,5 @@
 /**
- * ScenarioTypeSelect — pill buttons for disruption templates and the retry demo.
+ * ScenarioTypeSelect — pill buttons for disruption templates.
  */
 const OPTIONS = [
   {
@@ -26,12 +26,6 @@ const OPTIONS = [
     description:
       'Uses OpenWeather at each farm (no scripted rain/temp overlay). Shelf life and routing stress follow observed rain and temperature.',
   },
-  {
-    id: 'capacity_stress',
-    label: 'VALIDATOR RETRY DEMO',
-    description:
-      'Uses 3 undersized trucks (400 kg each) to trigger capacity failures and the retry loop. Weather = Normal Day.',
-  },
 ];
 
 export default function ScenarioTypeSelect({ value, onChange }) {
@@ -45,7 +39,7 @@ export default function ScenarioTypeSelect({ value, onChange }) {
       >
         Scenario Type
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
         {OPTIONS.map((opt) => {
           const isActive = value === opt.id;
           return (
