@@ -35,6 +35,25 @@ services:
       timeout: 3s
       retries: 10
 
+  osrm:
+    # Road-aware distance/route service. Map data is pre-processed once via
+    # scripts/prepare-osrm.{ps1,sh} into the osrm_data volume. The container
+    # exits immediately if the volume is empty — run the prep script first.
+    image: osrm/osrm-backend:latest
+    container_name: agentfarm_osrm
+    restart: unless-stopped
+    command: osrm-routed --algorithm mld /data/india-south-west.osrm
+    volumes:
+      - osrm_data:/data
+    networks:
+      - agentfarm_net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/5000"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   backend:
     build:
       context: ./backend
@@ -52,10 +71,14 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://agentfarm:agentfarm@postgres:5432/agentfarm
       REDIS_URL: redis://redis:6379/0
+      OSRM_URL: http://osrm:5000
+      VRP_TIME_LIMIT: 5
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      osrm:
         condition: service_healthy
     volumes:
       - ./backend:/app
@@ -85,3 +108,7 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  osrm_data:
+    # Created and populated by scripts/prepare-osrm.{ps1,sh}; compose only consumes it.
+    external: true
+    name: osrm_data

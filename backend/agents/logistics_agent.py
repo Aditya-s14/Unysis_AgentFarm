@@ -19,9 +19,12 @@ Travel-time adjustment:
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import math
 from datetime import datetime, timezone
 
+from config import get_settings
 from memory.outcome_store import get_route_history
 from memory.state import AgentFarmState, AgentTrace
 from models.schemas import Route, RoutePlan
@@ -74,28 +77,151 @@ async def _route_history_factor() -> float:
     return factor
 
 
+def _straight_km(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> float:
+    lat1, lon1 = math.radians(a_lat), math.radians(a_lng)
+    lat2, lon2 = math.radians(b_lat), math.radians(b_lng)
+    dlat, dlon = lat2 - lat1, lon2 - lon1
+    h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    return 6371.0 * 2 * math.asin(min(1.0, math.sqrt(h)))
+
+
+def _cluster_farms(farms: list, max_diameter_km: float) -> list[list]:
+    """Greedy single-link clustering bounded by max_diameter_km.
+
+    Farms are processed in (lat, lng) order; each farm joins the first
+    existing cluster where ALL members are within ``max_diameter_km``
+    straight-line, otherwise starts a new cluster. Caps cluster diameter
+    so VRP routes within a cluster stay day-trip feasible.
+    """
+    clusters: list[list] = []
+    for f in sorted(farms, key=lambda x: (x.lat, x.lng)):
+        joined = False
+        for c in clusters:
+            if all(_straight_km(f.lat, f.lng, m.lat, m.lng) <= max_diameter_km for m in c):
+                c.append(f)
+                joined = True
+                break
+        if not joined:
+            clusters.append([f])
+    return clusters
+
+
+def _allocate_trucks_by_demand(
+    regions: list[tuple[list, list]],
+    trucks: list,
+    at_risk_stock: list,
+) -> list[list]:
+    """Assign trucks to regions matching capacity to at-risk demand.
+
+    Highest-demand region gets the largest truck first; pulls additional
+    trucks until cluster demand is covered or pool is exhausted. Every
+    region gets at least one truck (smallest available) so it can be
+    planned even if it has low at-risk stock.
+    """
+    region_demands: list[tuple[int, float]] = []
+    for i, (region_farms, _) in enumerate(regions):
+        farm_ids = {f.id for f in region_farms}
+        demand = sum(s.kg_at_risk for s in at_risk_stock if s.farm_id in farm_ids)
+        region_demands.append((i, demand))
+
+    truck_pool = sorted(trucks, key=lambda t: -t.capacity_kg)
+    allocations: list[list] = [[] for _ in regions]
+
+    for region_idx, demand in sorted(region_demands, key=lambda x: -x[1]):
+        if not truck_pool:
+            break
+        allocations[region_idx].append(truck_pool.pop(0))
+        while truck_pool and sum(t.capacity_kg for t in allocations[region_idx]) < demand:
+            allocations[region_idx].append(truck_pool.pop(0))
+
+    for i in range(len(regions)):
+        if allocations[i]:
+            continue
+        if truck_pool:
+            allocations[i].append(truck_pool.pop(0))
+        else:
+            donor = next((a for a in allocations if a), None)
+            if donor:
+                allocations[i] = [donor[0]]
+
+    return allocations
+
+
+def _merge_clusters_to_cap(clusters: list[list], max_clusters: int) -> list[list]:
+    """Iteratively merge the two centroid-closest clusters until count <= max_clusters.
+
+    Used when initial clustering yields more groups than available trucks, since
+    each truck must own a region exclusively to avoid double-booking conflicts.
+    """
+    while len(clusters) > max_clusters:
+        centroids = [
+            (sum(f.lat for f in c) / len(c), sum(f.lng for f in c) / len(c))
+            for c in clusters
+        ]
+        best_i, best_j, best_d = 0, 1, float("inf")
+        for i in range(len(clusters)):
+            for j in range(i + 1, len(clusters)):
+                d = _straight_km(*centroids[i], *centroids[j])
+                if d < best_d:
+                    best_i, best_j, best_d = i, j, d
+        clusters[best_i].extend(clusters[best_j])
+        clusters.pop(best_j)
+    return clusters
+
+
 def _geo_regions(
     farms: list,
     demand_points: list,
+    num_trucks: int = 0,
 ) -> list[tuple[list, list]]:
-    """Split wide-area fixtures into local clusters so VRP stays day-trip feasible."""
-    if len(farms) <= 6:
-        return [(farms, demand_points)]
+    """Split wide-area fixtures into local clusters so VRP stays day-trip feasible.
 
-    bands = ((12.0, 14.5), (14.5, 16.5), (16.5, 22.0))
+    Uses diameter-bounded clustering rather than hardcoded latitude bands —
+    each cluster is constrained so any two farms in it are within
+    ``max_farm_mandi_km`` straight-line. Mandis assigned to a cluster must
+    also be within that radius of at least one farm in the cluster.
+
+    Mirrors how India's APMC system works in practice at the farmer layer:
+    produce moves to the nearest regional mandi (~tens of km), with
+    cross-state movement happening at the wholesaler tier later.
+    """
+    max_km = get_settings().max_farm_mandi_km
+
+    if len(farms) <= 6:
+        reachable = [
+            d for d in demand_points
+            if any(_straight_km(f.lat, f.lng, d.lat, d.lng) <= max_km for f in farms)
+        ]
+        return [(farms, reachable or demand_points)]
+
+    clusters = _cluster_farms(farms, max_diameter_km=max_km)
+    if num_trucks > 0 and len(clusters) > num_trucks:
+        logger.info(
+            "_geo_regions: %d clusters > %d trucks; merging nearest pairs to fit",
+            len(clusters), num_trucks,
+        )
+        clusters = _merge_clusters_to_cap(clusters, num_trucks)
+
     regions: list[tuple[list, list]] = []
-    for lo, hi in bands:
-        region_farms = [f for f in farms if lo <= f.lat < hi]
-        if not region_farms:
+    for cluster in clusters:
+        reachable = [
+            d for d in demand_points
+            if any(_straight_km(f.lat, f.lng, d.lat, d.lng) <= max_km for f in cluster)
+        ]
+        if not reachable:
+            logger.info(
+                "_geo_regions: cluster of %d farms has no mandi within %.0f km",
+                len(cluster), max_km,
+            )
             continue
-        cen_lat = sum(f.lat for f in region_farms) / len(region_farms)
-        cen_lng = sum(f.lng for f in region_farms) / len(region_farms)
+        cen_lat = sum(f.lat for f in cluster) / len(cluster)
+        cen_lng = sum(f.lng for f in cluster) / len(cluster)
         nearest_dps = sorted(
-            demand_points,
+            reachable,
             key=lambda d: (d.lat - cen_lat) ** 2 + (d.lng - cen_lng) ** 2,
         )
-        cap = max(2, min(len(demand_points), len(demand_points) // 2 + 1))
-        regions.append((region_farms, nearest_dps[:cap]))
+        cap = max(2, min(len(nearest_dps), len(nearest_dps) // 2 + 1))
+        regions.append((cluster, nearest_dps[:cap]))
 
     return regions or [(farms, demand_points)]
 
@@ -136,7 +262,8 @@ async def _solve_region(
         }
         matrix = apply_heat_wave_morning_bias(matrix, region_farms, risk_hours)
 
-    return solve_vrp(
+    return await asyncio.to_thread(
+        solve_vrp,
         region_farms,
         region_dps,
         trucks,
@@ -185,32 +312,25 @@ async def run(state: AgentFarmState) -> AgentFarmState:
     event_by_farm: dict[str, WeatherEvent] = {
         farm.id: event for farm, event in zip(farms, weather_events)
     }
-    regions = _geo_regions(farms, demand_points)
-    farm_counts = [len(rf) for rf, _ in regions]
-    total_farms = sum(farm_counts) or 1
+    regions = _geo_regions(farms, demand_points, num_trucks=len(trucks))
+    truck_allocations = _allocate_trucks_by_demand(regions, trucks, at_risk_stock)
+
+    fallback_last = trucks[-1:]
+    tasks = []
+    for (region_farms, region_dps), regional_trucks in zip(regions, truck_allocations):
+        rts = regional_trucks if regional_trucks else fallback_last
+        tasks.append(
+            _solve_region(
+                region_farms, region_dps, rts, at_risk_stock,
+                demand_scale, time_factor, scenario_type, event_by_farm,
+            )
+        )
+    region_plans = await asyncio.gather(*tasks)
 
     merged_routes: list[Route] = []
     objective_total = 0.0
-    truck_offset = 0
     notes_parts: list[str] = []
-
-    for region_farms, region_dps in regions:
-        share = max(1, round(len(trucks) * len(region_farms) / total_farms))
-        regional_trucks = trucks[truck_offset : truck_offset + share]
-        truck_offset += share
-        if not regional_trucks:
-            regional_trucks = trucks[-1:]
-
-        region_plan = await _solve_region(
-            region_farms,
-            region_dps,
-            regional_trucks,
-            at_risk_stock,
-            demand_scale,
-            time_factor,
-            scenario_type,
-            event_by_farm,
-        )
+    for (region_farms, region_dps), region_plan in zip(regions, region_plans):
         merged_routes.extend(region_plan.routes)
         if region_plan.objective_value:
             objective_total += region_plan.objective_value

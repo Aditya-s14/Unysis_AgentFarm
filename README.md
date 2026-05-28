@@ -159,11 +159,28 @@ REDIS_URL=redis://redis:6379/0
 OPENAI_BASE_URL=https://openrouter.ai/api/v1
 ```
 
-> **No API key?** The demo still runs end-to-end. Weather uses scenario overlays when live weather is unavailable; Logistics uses Haversine distances without Google Maps. Demand and Inventory use rule-based logic. The Advisor answers from structured plan data when the LLM is unavailable.
+> **No API key?** The demo still runs end-to-end. Weather uses scenario overlays when live weather is unavailable; Logistics uses local OSRM (or Haversine if OSRM is also down) without Google Maps. Demand and Inventory use rule-based logic. The Advisor answers from structured plan data when the LLM is unavailable.
 
 > **Live weather:** Set `OPENWEATHER_API_KEY` before `docker compose up` so the UI shows **Live (OpenWeather)** instead of simulated weather. On the scenario page, choose **Live Weather** to drive the pipeline from real-time readings at each farm (no scripted rain/temp overlay).
 
-### 2 — Start all services
+### 2 — One-time OSRM map preparation
+
+The stack ships with a local **OSRM** routing service (replaces Google Distance Matrix). Its map data covers **South + West India** (Karnataka, Tamil Nadu, Kerala, Andhra Pradesh, Telangana, Pondicherry, Maharashtra, Gujarat, Goa, Daman & Diu, Dadra & Nagar Haveli) — roughly 3 GB processed, isn't committed to git, each machine prepares it once into a Docker volume.
+
+```powershell
+# Windows (PowerShell)
+.\scripts\prepare-osrm.ps1
+```
+```bash
+# macOS / Linux
+./scripts/prepare-osrm.sh
+```
+
+The script downloads `southern-zone-latest.osm.pbf` (~600 MB) and `western-zone-latest.osm.pbf` (~500 MB) from Geofabrik, merges them with `osmium-tool`, then runs OSRM's three pre-processing steps and writes the result to the `osrm_data` Docker volume. **Takes ~10–15 min on first run, only once per machine.** Re-running is safe — finished stages are detected and skipped. For routing outside South/West India, the backend falls back to Google (if enabled) → Haversine.
+
+To force a fresh re-prep (e.g. updated map data): `docker volume rm osrm_data`, then re-run the script.
+
+### 3 — Start all services
 
 ```bash
 docker compose up -d --build
@@ -179,10 +196,11 @@ The backend installs from a **locked** `backend/requirements.txt` (generated fro
 | `agentfarm_backend` | 8000 | FastAPI + LangGraph pipeline |
 | `agentfarm_postgres` | 5432 | Plans + outcome history |
 | `agentfarm_redis` | 6379 | OpenWeather coordinate cache, per-run weather snapshots, distance cache, advisor sessions |
+| `agentfarm_osrm` | — | Local road-routing service (no host port; reached on internal network) |
 
 Wait ~30 seconds after containers are **Up** for the database to seed, then open **http://localhost:3000**.
 
-### 3 — Verify everything is healthy
+### 4 — Verify everything is healthy
 
 ```bash
 docker compose ps
@@ -194,7 +212,7 @@ curl http://localhost:8000/health
 open http://localhost:8000/docs
 ```
 
-### 4 — Stop or restart the stack
+### 5 — Stop or restart the stack
 
 ```bash
 docker compose restart          # restart all services

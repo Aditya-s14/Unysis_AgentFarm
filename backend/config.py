@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     GOOGLE_MAPS_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OSRM_URL: str = ""
     DATABASE_URL: str = (
         "postgresql+asyncpg://agentfarm:agentfarm@localhost:5432/agentfarm"
     )
@@ -30,6 +31,12 @@ class Settings(BaseSettings):
     max_retries: int = 2
     planning_temp: float = 0.0
     advisor_temp: float = 0.3
+    # Max straight-line distance (km) a farm may be matched with a mandi.
+    # Reflects how India's APMC system actually works at the farmer layer:
+    # produce moves to the nearest regional mandi (typically <100 km), with
+    # cross-state movement happening at the wholesaler tier later. 150 km
+    # gives some slack for cross-border districts.
+    max_farm_mandi_km: float = 150.0
 
 
 @lru_cache

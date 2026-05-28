@@ -352,6 +352,18 @@ async def get_plan_by_external_ref(ref: str) -> PlanTable | None:
         return q.scalar_one_or_none()
 
 
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, (date, datetime, time)):
+        return value.isoformat()
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    return value
+
+
 async def create_run_log(
     *,
     run_id: str,
@@ -366,7 +378,7 @@ async def create_run_log(
             plan_id=plan_id,
             level=level,
             message=message,
-            detail_json=detail,
+            detail_json=_jsonable(detail) if detail is not None else None,
         )
         session.add(row)
         await session.commit()

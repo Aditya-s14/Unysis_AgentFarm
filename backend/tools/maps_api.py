@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 DIST_CACHE_PREFIX = "dist:"
 DIST_CACHE_TTL_S = 3600
 GOOGLE_DM_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
+OSRM_ROUTE_PATH = "/route/v1/driving"
 EARTH_R_KM = 6371.0
 ROAD_FACTOR = 1.3
 
@@ -67,6 +68,32 @@ def _google_element_meters(
         return None
     v = el.get("distance", {}).get("value")
     return float(v) / 1000.0 if v is not None else None
+
+
+async def _osrm_pair_km(
+    client: httpx.AsyncClient,
+    base_url: str,
+    origin: tuple[float, float],
+    dest: tuple[float, float],
+) -> float | None:
+    # OSRM expects lon,lat (not lat,lng like Google).
+    coords = f"{origin[1]},{origin[0]};{dest[1]},{dest[0]}"
+    url = f"{base_url.rstrip('/')}{OSRM_ROUTE_PATH}/{coords}"
+    try:
+        resp = await client.get(url, params={"overview": "false"}, timeout=10.0)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("code") != "Ok":
+            logger.warning("OSRM status %s", data.get("code"))
+            return None
+        routes = data.get("routes") or []
+        if not routes:
+            return None
+        meters = routes[0].get("distance")
+        return float(meters) / 1000.0 if meters is not None else None
+    except Exception as exc:
+        logger.warning("OSRM distance failed: %s", exc)
+        return None
 
 
 async def _google_pair_km(
@@ -117,6 +144,7 @@ async def get_distance_matrix(
     """
     settings = get_settings()
     api_key = (settings.GOOGLE_MAPS_API_KEY or "").strip()
+    osrm_url = (settings.OSRM_URL or "").strip()
     n_o, n_d = len(origins), len(destinations)
     out: list[list[float]] = [[0.0] * n_d for _ in range(n_o)]
 
@@ -138,6 +166,13 @@ async def get_distance_matrix(
                 raw = await r.get(cache_key)
                 if raw is not None:
                     return i, j, float(raw)
+
+                # Primary: local OSRM (free, road-aware)
+                if osrm_url:
+                    o = await _osrm_pair_km(http_client, osrm_url, a, b)
+                    if o is not None:
+                        await r.set(cache_key, f"{o:.6f}", ex=DIST_CACHE_TTL_S)
+                        return i, j, o
 
                 # Live Google Maps call (rate-limited by semaphore)
                 if api_key:
