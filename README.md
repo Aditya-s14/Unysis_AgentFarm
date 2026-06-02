@@ -159,26 +159,23 @@ REDIS_URL=redis://redis:6379/0
 OPENAI_BASE_URL=https://openrouter.ai/api/v1
 ```
 
-> **No API key?** The demo still runs end-to-end. Weather uses scenario overlays when live weather is unavailable; Logistics uses local OSRM (or Haversine if OSRM is also down) without Google Maps. Demand and Inventory use rule-based logic. The Advisor answers from structured plan data when the LLM is unavailable.
+> **No API key?** The demo still runs end-to-end. Weather uses scenario overlays when live weather is unavailable; Logistics falls through to Haversine if no routing key is set. Demand and Inventory use rule-based logic. The Advisor answers from structured plan data when the LLM is unavailable.
 
 > **Live weather:** Set `OPENWEATHER_API_KEY` before `docker compose up` so the UI shows **Live (OpenWeather)** instead of simulated weather. On the scenario page, choose **Live Weather** to drive the pipeline from real-time readings at each farm (no scripted rain/temp overlay).
 
-### 2 — One-time OSRM map preparation
+### 2 — Get an OpenRouteService key (2 min, free, no card)
 
-The stack ships with a local **OSRM** routing service (replaces Google Distance Matrix). Its map data covers **South + West India** (Karnataka, Tamil Nadu, Kerala, Andhra Pradesh, Telangana, Pondicherry, Maharashtra, Gujarat, Goa, Daman & Diu, Dadra & Nagar Haveli) — roughly 3 GB processed, isn't committed to git, each machine prepares it once into a Docker volume.
+This branch uses **OpenRouteService** as the primary road-routing source — no map data to download, no Docker memory tuning, just an API key.
 
-```powershell
-# Windows (PowerShell)
-.\scripts\prepare-osrm.ps1
-```
-```bash
-# macOS / Linux
-./scripts/prepare-osrm.sh
-```
+1. Sign up at https://openrouteservice.org → My Account → Tokens
+2. Click **Create Token** → copy the key
+3. Paste into `.env`: `ORS_API_KEY=<your-key-here>`
 
-The script downloads `southern-zone-latest.osm.pbf` (~600 MB) and `western-zone-latest.osm.pbf` (~500 MB) from Geofabrik, merges them with `osmium-tool`, then runs OSRM's three pre-processing steps and writes the result to the `osrm_data` Docker volume. **Takes ~10–15 min on first run, only once per machine.** Re-running is safe — finished stages are detected and skipped. For routing outside South/West India, the backend falls back to Google (if enabled) → Haversine.
+Free tier gives **2,000 directions requests per day** with no card required. More than enough for demos and dev work.
 
-To force a fresh re-prep (e.g. updated map data): `docker volume rm osrm_data`, then re-run the script.
+> **What if I don't set ORS_API_KEY?** Backend silently falls through to Google (if its key is set) → Haversine x1.3. The pipeline still runs end-to-end, just with less accurate distances.
+
+> **Self-hosting OSRM instead?** This branch still supports the self-hosted OSRM path from the `v1` branch — see "Optional: self-host OSRM" below.
 
 ### 3 — Start all services
 
@@ -196,7 +193,28 @@ The backend installs from a **locked** `backend/requirements.txt` (generated fro
 | `agentfarm_backend` | 8000 | FastAPI + LangGraph pipeline |
 | `agentfarm_postgres` | 5432 | Plans + outcome history |
 | `agentfarm_redis` | 6379 | OpenWeather coordinate cache, per-run weather snapshots, distance cache, advisor sessions |
-| `agentfarm_osrm` | — | Local road-routing service (no host port; reached on internal network) |
+| `agentfarm_osrm` | — | **Optional** self-hosted road routing — only started with `--profile self-host` |
+
+### Optional: self-host OSRM instead of using OpenRouteService
+
+If you want to run road routing locally (no daily request limits, no third-party network calls) — at the cost of ~5 GB disk, ~10 GB RAM during prep, and ~15 min of one-time setup — the original OSRM workflow still works on this branch:
+
+```powershell
+# Windows
+.\scripts\prepare-osrm.ps1
+```
+```bash
+# macOS / Linux
+./scripts/prepare-osrm.sh
+```
+
+Then start the stack with the `self-host` profile, which adds the `osrm` container alongside the regular four:
+
+```bash
+docker compose --profile self-host up -d
+```
+
+When both `ORS_API_KEY` and a running OSRM container are present, the backend prefers OpenRouteService (it's already a hosted answer); OSRM acts as a backup. Empty `ORS_API_KEY` + running OSRM = OSRM is used directly.
 
 Wait ~30 seconds after containers are **Up** for the database to seed, then open **http://localhost:3000**.
 

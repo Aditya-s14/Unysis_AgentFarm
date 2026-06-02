@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://openrouter.ai/api/v1"
     OSRM_URL: str = ""
+    # OpenRouteService (NOT OpenRouter — different services).
+    # Hosted free routing API: https://openrouteservice.org (sign up for key).
+    # When set, takes priority over OSRM in the distance chain.
+    ORS_API_KEY: str = ""
     DATABASE_URL: str = (
         "postgresql+asyncpg://agentfarm:agentfarm@localhost:5432/agentfarm"
     )

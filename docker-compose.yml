@@ -36,9 +36,13 @@ services:
       retries: 10
 
   osrm:
-    # Road-aware distance/route service. Map data is pre-processed once via
-    # scripts/prepare-osrm.{ps1,sh} into the osrm_data volume. The container
-    # exits immediately if the volume is empty — run the prep script first.
+    # Optional self-hosted road routing. By default this branch uses hosted
+    # OpenRouteService (ORS_API_KEY in .env) and does NOT start OSRM.
+    #
+    # To self-host OSRM instead: prep the map data via
+    # scripts/prepare-osrm.{ps1,sh}, then start with:
+    #   docker compose --profile self-host up -d
+    profiles: ["self-host"]
     image: osrm/osrm-backend:latest
     container_name: agentfarm_osrm
     restart: unless-stopped
@@ -71,14 +75,14 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://agentfarm:agentfarm@postgres:5432/agentfarm
       REDIS_URL: redis://redis:6379/0
+      # OSRM_URL only matters if you started the optional `osrm` service via
+      # `docker compose --profile self-host up -d`. Otherwise harmlessly unused.
       OSRM_URL: http://osrm:5000
       VRP_TIME_LIMIT: 5
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      osrm:
         condition: service_healthy
     volumes:
       - ./backend:/app
@@ -109,6 +113,7 @@ volumes:
   postgres_data:
   redis_data:
   osrm_data:
-    # Created and populated by scripts/prepare-osrm.{ps1,sh}; compose only consumes it.
+    # Only needed when running `docker compose --profile self-host up -d`.
+    # Created and populated by scripts/prepare-osrm.{ps1,sh}.
     external: true
     name: osrm_data

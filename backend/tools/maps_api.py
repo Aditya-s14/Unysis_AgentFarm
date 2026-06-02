@@ -22,8 +22,12 @@ DIST_CACHE_PREFIX = "dist:"
 DIST_CACHE_TTL_S = 3600
 GOOGLE_DM_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
 OSRM_ROUTE_PATH = "/route/v1/driving"
+# OpenRouteService — hosted free routing engine. NOT OpenRouter (the LLM API).
+ORS_DIRECTIONS_URL = "https://api.openrouteservice.org/v2/directions/driving-car"
 EARTH_R_KM = 6371.0
 ROAD_FACTOR = 1.3
+# Max concurrent ORS calls — free tier is 40 req/min, so keep it low.
+_ORS_CONCURRENCY = 10
 
 
 def _pair_cache_key(a: tuple[float, float], b: tuple[float, float]) -> str:
@@ -68,6 +72,39 @@ def _google_element_meters(
         return None
     v = el.get("distance", {}).get("value")
     return float(v) / 1000.0 if v is not None else None
+
+
+async def _ors_pair_km(
+    client: httpx.AsyncClient,
+    api_key: str,
+    origin: tuple[float, float],
+    dest: tuple[float, float],
+) -> float | None:
+    # ORS expects [lon, lat] like OSRM, not [lat, lng] like Google.
+    payload = {
+        "coordinates": [[origin[1], origin[0]], [dest[1], dest[0]]],
+        "instructions": False,
+        "geometry": False,
+    }
+    headers = {
+        "Authorization": api_key,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    try:
+        resp = await client.post(
+            ORS_DIRECTIONS_URL, json=payload, headers=headers, timeout=15.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        routes = data.get("routes") or []
+        if not routes:
+            return None
+        meters = routes[0].get("summary", {}).get("distance")
+        return float(meters) / 1000.0 if meters is not None else None
+    except Exception as exc:
+        logger.warning("ORS distance failed: %r", exc)
+        return None
 
 
 async def _osrm_pair_km(
@@ -145,11 +182,13 @@ async def get_distance_matrix(
     settings = get_settings()
     api_key = (settings.GOOGLE_MAPS_API_KEY or "").strip()
     osrm_url = (settings.OSRM_URL or "").strip()
+    ors_key = (settings.ORS_API_KEY or "").strip()
     n_o, n_d = len(origins), len(destinations)
     out: list[list[float]] = [[0.0] * n_d for _ in range(n_o)]
 
     r = redis.from_url(settings.REDIS_URL, decode_responses=True)
     sem = asyncio.Semaphore(_GOOGLE_CONCURRENCY)
+    ors_sem = asyncio.Semaphore(_ORS_CONCURRENCY)
 
     try:
         async with httpx.AsyncClient() as http_client:
@@ -167,7 +206,15 @@ async def get_distance_matrix(
                 if raw is not None:
                     return i, j, float(raw)
 
-                # Primary: local OSRM (free, road-aware)
+                # Primary: hosted OpenRouteService (free, no setup)
+                if ors_key:
+                    async with ors_sem:
+                        o = await _ors_pair_km(http_client, ors_key, a, b)
+                    if o is not None:
+                        await r.set(cache_key, f"{o:.6f}", ex=DIST_CACHE_TTL_S)
+                        return i, j, o
+
+                # Secondary: self-hosted OSRM (if anyone prepped it)
                 if osrm_url:
                     o = await _osrm_pair_km(http_client, osrm_url, a, b)
                     if o is not None:
