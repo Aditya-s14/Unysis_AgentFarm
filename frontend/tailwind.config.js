@@ -11,7 +11,9 @@ module.exports = {
         card:      'var(--bg-card)',
         line:      'var(--border)',
         accent:    'var(--accent)',
+        navy:      'var(--navy)',
         paper:     'var(--text)',
+        secondary: 'var(--text-secondary)',
         muted:     'var(--muted)',
         ok:        'var(--green-ok)',
         risk:      'var(--red-risk)',
@@ -20,8 +22,9 @@ module.exports = {
         orangedmd: 'var(--orange-dmd)',
       },
       fontFamily: {
-        syne: ['Syne', 'system-ui', 'sans-serif'],
-        mono: ['"DM Mono"', 'ui-monospace', 'monospace'],
+        sans:  ['Inter', '-apple-system', 'system-ui', 'sans-serif'],
+        serif: ['"Playfair Display"', 'Georgia', 'serif'],
+        mono:  ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       letterSpacing: {
         'wider-2': '0.15em',
