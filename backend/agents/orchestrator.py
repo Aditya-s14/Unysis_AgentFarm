@@ -93,8 +93,12 @@ async def orchestrator_entry(state: AgentFarmState) -> AgentFarmState:
     state["agent_traces"] = [*state["agent_traces"], trace]
 
     if input_errors:
+        state["pipeline_blocked"] = True
+        state["input_errors"] = input_errors
         logger.warning("orchestrator_entry validation errors: %s", input_errors)
     else:
+        state["pipeline_blocked"] = False
+        state["input_errors"] = []
         logger.info("orchestrator_entry OK run_id=%s", run_id)
 
     return state

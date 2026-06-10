@@ -28,13 +28,14 @@ export function resolveWeatherPanel(cached) {
   return ws;
 }
 
-/** live | synthetic | mixed */
+/** live | stale | synthetic | mixed */
 export function getWeatherSourceMode(data) {
   if (!data || data.unavailable) return 'unavailable';
   const src = normalizeWeatherSource(data);
   if (src === 'mixed') return 'mixed';
   if (src === 'openweather' && data.scenario_modifier_applied) return 'mixed';
   if (src === 'openweather') return 'live';
+  if (src === 'stale_cache' || data.stale_reading) return 'stale';
   if (src === 'synthetic_fallback') return 'synthetic';
   return src ? 'synthetic' : 'unavailable';
 }
@@ -49,10 +50,16 @@ export function weatherSourceTooltip(data) {
     return 'Temperature and rainfall from OpenWeatherMap current + forecast APIs.';
   }
   if (mode === 'mixed') {
+    const disclaimer = data.weather_disclaimer ? ` ${data.weather_disclaimer}` : '';
     return (
       'Live OpenWeather readings with scenario overlay applied for the selected scenario type. '
       + (data.scenario_adjustment_label || '')
+      + disclaimer
     );
+  }
+  if (mode === 'stale') {
+    return data.weather_disclaimer
+      || "Couldn't fetch the current weather update; showing the most recently fetched reading.";
   }
   if (mode === 'synthetic') {
     return data.synthetic_reason || SYNTHETIC_TOOLTIP;
@@ -77,7 +84,13 @@ export function weatherHeadline(data) {
     }
     return `Live: ${condition}`;
   }
+  if (src === 'stale_cache') {
+    return `Cached weather: ${condition}`;
+  }
   if (src === 'synthetic_fallback') {
+    if (data.fallback_mode === 'live_weather' || data.effective_scenario_type === 'live_weather') {
+      return 'Live weather fallback (OpenWeather unavailable): mild baseline, live risk rules';
+    }
     return `Simulated (no API key): ${scenarioLabel} effects applied`;
   }
   if (src === 'mixed') {
@@ -113,6 +126,18 @@ export function conditionLabel(condition) {
     live_weather: 'Live conditions',
   };
   return map[condition] || String(condition);
+}
+
+export function formatReadingAge(isoTimestamp) {
+  if (!isoTimestamp) return null;
+  const fetched = new Date(isoTimestamp);
+  if (Number.isNaN(fetched.getTime())) return null;
+  const minutes = Math.max(0, Math.round((Date.now() - fetched.getTime()) / 60000));
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hr ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
 export function riskColor(level) {

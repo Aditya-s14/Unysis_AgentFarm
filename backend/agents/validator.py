@@ -140,6 +140,13 @@ def _check_availability(state: AgentFarmState, errors: list[str], warnings: list
     return violations
 
 
+def _all_severe_weather(risk_summary: dict[str, str]) -> bool:
+    """True when every farm in the risk summary is severe."""
+    if not risk_summary:
+        return False
+    return all(level == "severe" for level in risk_summary.values())
+
+
 def _check_severe_weather(
     state: AgentFarmState,
     errors: list[str],
@@ -156,6 +163,13 @@ def _check_severe_weather(
     farm_by_id = _farm_map(farms)
     severe_ids = {fid for fid, r in risk_summary.items() if r == "severe"}
     if not severe_ids:
+        return blocked_routes
+
+    if _all_severe_weather(risk_summary):
+        warnings.append(
+            "ALL_SEVERE_WEATHER: every farm is severe-risk; routing through "
+            "severe farms is unavoidable — prioritise urgent pickups only"
+        )
         return blocked_routes
 
     for route in route_plan.routes:
@@ -275,7 +289,11 @@ async def run(state: AgentFarmState) -> AgentFarmState:
     will_retry = (not passed) and retry_count < cap
     max_retries_reached = (not passed) and retry_count >= cap
 
+    risk_summary = state.get("weather_risk_summary") or {}
+    all_severe = _all_severe_weather(risk_summary)
+
     details = {
+        "all_severe_weather": all_severe,
         "capacity_violations": capacity_violations,
         "time_window_violations": time_window_violations,
         "weather_blocked_routes": weather_blocked_routes,

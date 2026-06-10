@@ -168,6 +168,9 @@ def build_weather_snapshot(
                 "humidity_pct": fm.get("humidity_pct"),
                 "wind_speed_ms": fm.get("wind_speed_ms"),
                 "api_used": bool(fm.get("api_used", meta.get("weather_source") == "openweather")),
+                "stale_reading": bool(fm.get("stale_reading")),
+                "reading_fetched_at": fm.get("reading_fetched_at"),
+                "weather_disclaimer": fm.get("weather_disclaimer"),
             }
         )
 
@@ -263,6 +266,16 @@ def build_weather_summary(
             summary["scenario_adjustment_label"] = meta["scenario_adjustment_label"]
         if meta.get("synthetic_reason"):
             summary["synthetic_reason"] = meta["synthetic_reason"]
+        if meta.get("weather_disclaimer"):
+            summary["weather_disclaimer"] = meta["weather_disclaimer"]
+        if meta.get("stale_reading"):
+            summary["stale_reading"] = True
+        if meta.get("reading_fetched_at"):
+            summary["reading_fetched_at"] = meta["reading_fetched_at"]
+        if meta.get("fallback_mode"):
+            summary["fallback_mode"] = meta["fallback_mode"]
+        if meta.get("farms_with_stale_cache") is not None:
+            summary["farms_with_stale_cache"] = meta["farms_with_stale_cache"]
         if meta.get("temperature_c_base") is not None:
             summary["temperature_c_base"] = meta["temperature_c_base"]
         if meta.get("rainfall_mm_base") is not None:

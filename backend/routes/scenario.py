@@ -74,9 +74,23 @@ class RunScenarioResponse(BaseModel):
     weather_snapshot: dict[str, Any] = Field(default_factory=dict)
 
 
+def _validate_scenario_inputs(body: RunScenarioRequest) -> None:
+    """Reject runs with missing required inputs before invoking the graph."""
+    errors: list[str] = []
+    if not body.farms:
+        errors.append("farms list is empty")
+    if not body.demand_points:
+        errors.append("demand_points list is empty")
+    if not body.trucks:
+        errors.append("trucks list is empty")
+    if errors:
+        raise HTTPException(status_code=422, detail={"errors": errors})
+
+
 @router.post("/scenario/run", response_model=RunScenarioResponse)
 async def run_scenario_endpoint(body: RunScenarioRequest) -> RunScenarioResponse:
     """Run the full multi-agent pipeline and return the optimised plan + KPIs."""
+    _validate_scenario_inputs(body)
     try:
         req = PipelineRequest(
             farms=body.farms,

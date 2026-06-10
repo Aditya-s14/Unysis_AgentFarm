@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 from memory.state import AgentFarmState, AgentTrace
 from tools.scenario_effects import (
+    LIVE,
     normalize_scenario_type,
     scenario_adjustment_details,
     scenario_trace_note,
@@ -44,11 +45,14 @@ async def run(state: AgentFarmState) -> AgentFarmState:
     state["weather_risk_summary"] = risk_summary
     state["weather_fetch_meta"] = meta
 
+    weather_source = meta.get("weather_source", "synthetic_fallback")
+    if weather_source == "synthetic_fallback":
+        state["scenario_type"] = LIVE
+
     severe = sum(1 for v in risk_summary.values() if v == "severe")
     warning = sum(1 for v in risk_summary.values() if v == "warning")
     normal = len(risk_summary) - severe - warning
 
-    weather_source = meta.get("weather_source", "synthetic_fallback")
     scenario_mod = meta.get("scenario_modifier_applied", True)
 
     trace: AgentTrace = {
@@ -60,12 +64,15 @@ async def run(state: AgentFarmState) -> AgentFarmState:
             f"{len(farms)} farms — severe={severe}, warning={warning}, normal={normal}; "
             f"weather_source={weather_source}; "
             f"scenario_modifier_applied={str(scenario_mod).lower()}; "
-            + scenario_trace_note(raw_scenario)
+            f"fallback_mode={meta.get('fallback_mode', 'none')}; "
+            + scenario_trace_note(
+                state.get("scenario_type") if weather_source == "synthetic_fallback" else raw_scenario
+            )
         ),
         "token_count": None,
         "details": {
             "scenario_adjustments": scenario_adjustment_details(
-                scenario_type=raw_scenario,
+                scenario_type=state.get("scenario_type") or raw_scenario,
                 weather_fetch_meta=meta,
             ),
         },

@@ -1,9 +1,13 @@
 """OpenWeatherMap free-tier weather + Redis cache with scenario overlays.
 
-Scenario overlays (applied after live/synthetic readings):
+When OpenWeather is unavailable, all farms fall back to **live_weather rules**
+(baseline 0 mm / 28°C, live thresholds — no scripted heat/monsoon overlay).
+
+Scripted overlays (only when API data is present):
   normal_day          — rain=0, moderate temp (~28°C), all farms risk=normal
   heat_wave           — temp >38°C, heat_wave flag, risk floor=warning
   monsoon_disruption  — high-risk zone farms rain>25mm, warning or severe
+  live_weather        — no overlay; classify from observed readings only
 """
 
 from __future__ import annotations
@@ -11,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
 
 import httpx
@@ -34,6 +38,11 @@ _REDIS: redis.Redis | None = None
 
 WEATHER_CACHE_PREFIX = "weather2:"
 WEATHER_CACHE_TTL_S = 1200
+WEATHER_LAST_GOOD_PREFIX = "weather2:last:"
+WEATHER_LAST_GOOD_TTL_S = 7 * 24 * 3600
+STALE_READING_DISCLAIMER = (
+    "Couldn't fetch the current weather update; showing the most recently fetched reading."
+)
 OW_CURRENT_URL = "https://api.openweathermap.org/data/2.5/weather"
 OW_FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast"
 
@@ -42,6 +51,94 @@ _OWM_SEMAPHORE = asyncio.Semaphore(10)
 _NORMAL_TEMP_C = 28.0
 _HEAT_WAVE_TEMP_C = 39.0
 _MONSOON_RAIN_MM = 28.0
+
+# Sensor / API reading sanity bounds (India-relevant ambient range).
+_MIN_TEMP_C = -10.0
+_MAX_TEMP_C = 55.0
+_MAX_RAIN_MM = 500.0
+_REJECT_TEMP_BELOW = -50.0
+_REJECT_TEMP_ABOVE = 80.0
+_REJECT_RAIN_ABOVE = 1000.0
+
+
+def sanitize_sensor_readings(
+    rain_mm: float,
+    temp_c: float,
+) -> tuple[float, float, str]:
+    """Validate and clamp weather readings.
+
+    Returns ``(rain_mm, temp_c, quality)`` where quality is one of
+    ``ok``, ``clamped``, or ``rejected`` (caller should use live_weather fallback).
+    """
+    if (
+        temp_c < _REJECT_TEMP_BELOW
+        or temp_c > _REJECT_TEMP_ABOVE
+        or rain_mm < 0
+        or rain_mm > _REJECT_RAIN_ABOVE
+    ):
+        return 0.0, _NORMAL_TEMP_C, "rejected"
+
+    clamped = False
+    if rain_mm > _MAX_RAIN_MM:
+        rain_mm = _MAX_RAIN_MM
+        clamped = True
+    if temp_c < _MIN_TEMP_C:
+        temp_c = _MIN_TEMP_C
+        clamped = True
+    if temp_c > _MAX_TEMP_C:
+        temp_c = _MAX_TEMP_C
+        clamped = True
+
+    return rain_mm, temp_c, "clamped" if clamped else "ok"
+
+
+def _live_weather_fallback_event(farm: Farm) -> WeatherEvent:
+    """Build a per-farm event using live_weather classification (no scripted overlay)."""
+    return _event_from_readings(farm, 0.0, _NORMAL_TEMP_C, scenario_type=LIVE)
+
+
+def _live_weather_fallback_farm_meta(
+    farm: Farm,
+    event: WeatherEvent,
+    *,
+    data_quality: str | None = None,
+    humidity_pct: float | None = None,
+    wind_speed_ms: float | None = None,
+) -> dict[str, Any]:
+    """Farm meta row when OpenWeather was not used — live_weather fallback rules."""
+    meta: dict[str, Any] = {
+        "farm_id": farm.id,
+        "api_used": False,
+        "fallback_mode": "live_weather",
+        "base_rain_mm": 0.0,
+        "base_temp_c": _NORMAL_TEMP_C,
+        "adjusted_rain_mm": float(event.precipitation_mm or 0),
+        "adjusted_temp_c": _parse_temp_from_desc(event.description) or _NORMAL_TEMP_C,
+        "severity": event.severity,
+        "description": event.description,
+        "precipitation_mm": float(event.precipitation_mm or 0),
+    }
+    if data_quality:
+        meta["data_quality"] = data_quality
+    if humidity_pct is not None:
+        meta["humidity_pct"] = humidity_pct
+    if wind_speed_ms is not None:
+        meta["wind_speed_ms"] = wind_speed_ms
+    return meta
+
+
+def _live_weather_fallback_batch(
+    farms: list[Farm],
+    *,
+    requested_scenario: str,
+    synthetic_reason: str,
+) -> tuple[list[WeatherEvent], dict[str, Any]]:
+    """All-farm fallback: live_weather rules, effective scenario = live_weather."""
+    events = [_live_weather_fallback_event(f) for f in farms]
+    farm_meta = [_live_weather_fallback_farm_meta(f, e) for f, e in zip(farms, events)]
+    meta = _aggregate_farm_meta(farm_meta, requested_scenario)
+    meta["synthetic_reason"] = synthetic_reason
+    return events, meta
 
 
 async def _redis_client() -> redis.Redis:
@@ -55,6 +152,115 @@ async def _redis_client() -> redis.Redis:
 def _cache_key(lat: float, lng: float, endpoint: str) -> str:
     tag = "cur" if "weather" in endpoint and "forecast" not in endpoint else "fct"
     return f"{WEATHER_CACHE_PREFIX}{lat:.4f}:{lng:.4f}:{tag}"
+
+
+def _last_good_key(lat: float, lng: float) -> str:
+    return f"{WEATHER_LAST_GOOD_PREFIX}{lat:.4f}:{lng:.4f}"
+
+
+async def _save_last_good_reading(
+    r: redis.Redis,
+    farm: Farm,
+    *,
+    base_rain_mm: float,
+    base_temp_c: float,
+    humidity_pct: float | None = None,
+    wind_speed_ms: float | None = None,
+) -> None:
+    payload = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "base_rain_mm": round(base_rain_mm, 2),
+        "base_temp_c": round(base_temp_c, 2),
+        "humidity_pct": humidity_pct,
+        "wind_speed_ms": wind_speed_ms,
+    }
+    try:
+        await r.set(
+            _last_good_key(farm.lat, farm.lng),
+            json.dumps(payload),
+            ex=WEATHER_LAST_GOOD_TTL_S,
+        )
+    except Exception:
+        pass
+
+
+async def _load_last_good_reading(
+    r: redis.Redis,
+    farm: Farm,
+) -> dict[str, Any] | None:
+    try:
+        raw = await r.get(_last_good_key(farm.lat, farm.lng))
+        if raw:
+            return json.loads(raw)
+    except Exception:
+        pass
+    return None
+
+
+def _stale_cache_fallback_farm_meta(
+    farm: Farm,
+    event: WeatherEvent,
+    *,
+    base_rain_mm: float,
+    base_temp_c: float,
+    reading_fetched_at: str,
+    data_quality: str = "stale_cache",
+    humidity_pct: float | None = None,
+    wind_speed_ms: float | None = None,
+) -> dict[str, Any]:
+    adj_temp = _parse_temp_from_desc(event.description) or base_temp_c
+    return {
+        "farm_id": farm.id,
+        "api_used": False,
+        "fallback_mode": "stale_cache",
+        "stale_reading": True,
+        "reading_fetched_at": reading_fetched_at,
+        "weather_disclaimer": STALE_READING_DISCLAIMER,
+        "data_quality": data_quality,
+        "base_rain_mm": round(base_rain_mm, 1),
+        "base_temp_c": round(base_temp_c, 1),
+        "adjusted_rain_mm": float(event.precipitation_mm or 0),
+        "adjusted_temp_c": round(adj_temp, 1),
+        "severity": event.severity,
+        "description": event.description,
+        "precipitation_mm": float(event.precipitation_mm or 0),
+        "humidity_pct": humidity_pct,
+        "wind_speed_ms": wind_speed_ms,
+    }
+
+
+async def _try_stale_cache_fallback(
+    farm: Farm,
+    r: redis.Redis,
+    scenario_type: str,
+) -> tuple[WeatherEvent, dict[str, Any]] | None:
+    """Use last successful OpenWeather reading when a fresh fetch is unavailable."""
+    stored = await _load_last_good_reading(r, farm)
+    if not stored:
+        return None
+
+    base_rain = float(stored.get("base_rain_mm") or 0.0)
+    base_temp = float(stored.get("base_temp_c") or _NORMAL_TEMP_C)
+    base_rain, base_temp, quality = sanitize_sensor_readings(base_rain, base_temp)
+    if quality == "rejected":
+        return None
+
+    event = _event_from_readings(farm, base_rain, base_temp, scenario_type=scenario_type)
+    logger.warning(
+        "weather: farm=%s — stale cache fallback (fetched_at=%s)",
+        farm.id,
+        stored.get("fetched_at"),
+    )
+    return event, _stale_cache_fallback_farm_meta(
+        farm,
+        event,
+        base_rain_mm=base_rain,
+        base_temp_c=base_temp,
+        reading_fetched_at=str(stored.get("fetched_at") or ""),
+        data_quality=quality,
+        humidity_pct=stored.get("humidity_pct"),
+        wind_speed_ms=stored.get("wind_speed_ms"),
+    )
 
 
 def _scenario_adjustment_label(scenario: str) -> str | None:
@@ -253,18 +459,15 @@ async def _fetch_farm_readings(
     wind_speed_ms: float | None = None
 
     if not api_used:
-        logger.warning("weather: both endpoints failed for farm %s — scenario overlay", farm.id)
-        event = _event_from_readings(
-            farm, 0.0, _NORMAL_TEMP_C, scenario_type=scenario_type,
+        stale = await _try_stale_cache_fallback(farm, r, scenario_type)
+        if stale:
+            return stale
+        logger.warning(
+            "weather: both endpoints failed for farm %s — live_weather fallback",
+            farm.id,
         )
-        return event, {
-            "farm_id": farm.id,
-            "api_used": False,
-            "base_rain_mm": 0.0,
-            "base_temp_c": _NORMAL_TEMP_C,
-            "adjusted_rain_mm": event.precipitation_mm,
-            "adjusted_temp_c": _parse_temp_from_desc(event.description) or _NORMAL_TEMP_C,
-        }
+        event = _live_weather_fallback_event(farm)
+        return event, _live_weather_fallback_farm_meta(farm, event)
 
     cur_rain, cur_temp, humidity_pct, wind_speed_ms = (
         _parse_current(cur_payload) if cur_payload else (0.0, 0.0, None, None)
@@ -273,6 +476,34 @@ async def _fetch_farm_readings(
 
     base_rain = max(cur_rain, fct_rain)
     base_temp = max(cur_temp, fct_temp)
+    base_rain, base_temp, data_quality = sanitize_sensor_readings(base_rain, base_temp)
+
+    if data_quality == "rejected":
+        stale = await _try_stale_cache_fallback(farm, r, scenario_type)
+        if stale:
+            return stale
+        logger.warning(
+            "weather: rejected outlier readings for farm %s — live_weather fallback",
+            farm.id,
+        )
+        event = _live_weather_fallback_event(farm)
+        return event, _live_weather_fallback_farm_meta(
+            farm,
+            event,
+            data_quality="rejected",
+            humidity_pct=humidity_pct,
+            wind_speed_ms=wind_speed_ms,
+        )
+
+    await _save_last_good_reading(
+        r,
+        farm,
+        base_rain_mm=base_rain,
+        base_temp_c=base_temp,
+        humidity_pct=humidity_pct,
+        wind_speed_ms=wind_speed_ms,
+    )
+
     event = _event_from_readings(farm, base_rain, base_temp, scenario_type=scenario_type)
     adj_temp = _parse_temp_from_desc(event.description) or base_temp
 
@@ -286,9 +517,10 @@ async def _fetch_farm_readings(
         st,
     )
 
-    return event, {
+    farm_meta: dict[str, Any] = {
         "farm_id": farm.id,
         "api_used": True,
+        "data_quality": data_quality,
         "base_rain_mm": round(base_rain, 1),
         "base_temp_c": round(base_temp, 1),
         "adjusted_rain_mm": float(event.precipitation_mm or 0),
@@ -296,6 +528,7 @@ async def _fetch_farm_readings(
         "humidity_pct": humidity_pct,
         "wind_speed_ms": wind_speed_ms,
     }
+    return event, farm_meta
 
 
 def _parse_temp_from_desc(desc: str) -> float | None:
@@ -309,12 +542,18 @@ def _parse_temp_from_desc(desc: str) -> float | None:
 
 def _aggregate_farm_meta(farm_meta: list[dict[str, Any]], scenario: str) -> dict[str, Any]:
     api_count = sum(1 for m in farm_meta if m.get("api_used"))
+    stale_count = sum(1 for m in farm_meta if m.get("fallback_mode") == "stale_cache")
+    synthetic_count = sum(
+        1 for m in farm_meta if m.get("fallback_mode") == "live_weather"
+    )
     total = len(farm_meta) or 1
 
-    if api_count == 0:
-        weather_source = "synthetic_fallback"
-    elif api_count == total:
+    if api_count == total:
         weather_source = "openweather"
+    elif stale_count == total and api_count == 0:
+        weather_source = "stale_cache"
+    elif api_count == 0 and stale_count == 0:
+        weather_source = "synthetic_fallback"
     else:
         weather_source = "mixed"
 
@@ -324,8 +563,11 @@ def _aggregate_farm_meta(farm_meta: list[dict[str, Any]], scenario: str) -> dict
         for m in farm_meta
     )
 
-    base_temps = [m["base_temp_c"] for m in farm_meta if m.get("api_used")]
-    base_rains = [m["base_rain_mm"] for m in farm_meta if m.get("api_used")]
+    def _has_real_reading(m: dict[str, Any]) -> bool:
+        return bool(m.get("api_used")) or m.get("fallback_mode") == "stale_cache"
+
+    base_temps = [m["base_temp_c"] for m in farm_meta if _has_real_reading(m)]
+    base_rains = [m["base_rain_mm"] for m in farm_meta if _has_real_reading(m)]
     adj_temps = [m["adjusted_temp_c"] for m in farm_meta]
     adj_rains = [m["adjusted_rain_mm"] for m in farm_meta]
     humidities = [m["humidity_pct"] for m in farm_meta if m.get("humidity_pct") is not None]
@@ -334,25 +576,66 @@ def _aggregate_farm_meta(farm_meta: list[dict[str, Any]], scenario: str) -> dict
     def _avg(vals: list[float]) -> float | None:
         return round(sum(vals) / len(vals), 1) if vals else None
 
+    requested = normalize_scenario_type(scenario)
+    effective = requested
+    if weather_source == "synthetic_fallback":
+        effective = LIVE
+        scenario_modifier_applied = False
+
     meta: dict[str, Any] = {
         "weather_source": weather_source,
         "scenario_modifier_applied": scenario_modifier_applied,
-        "scenario_type": scenario,
-        "scenario_adjustment_label": _scenario_adjustment_label(scenario),
+        "scenario_type": effective,
+        "requested_scenario_type": requested,
+        "effective_scenario_type": effective,
+        "scenario_adjustment_label": _scenario_adjustment_label(effective),
         "farms_with_live_api": api_count,
+        "farms_with_stale_cache": stale_count,
         "farms_total": total,
     }
 
     if weather_source == "synthetic_fallback":
+        meta["fallback_mode"] = "live_weather"
         meta["synthetic_reason"] = (
-            "OPENWEATHER_API_KEY not configured or all API calls failed"
+            "OpenWeather unavailable — live_weather fallback "
+            "(0 mm / 28°C baseline, live risk thresholds; no scripted overlay)"
         )
+    elif weather_source == "stale_cache":
+        meta["fallback_mode"] = "stale_cache"
+        meta["stale_reading"] = True
+        meta["weather_disclaimer"] = STALE_READING_DISCLAIMER
+        fetched_times = [
+            m.get("reading_fetched_at")
+            for m in farm_meta
+            if m.get("reading_fetched_at")
+        ]
+        if fetched_times:
+            meta["reading_fetched_at"] = min(fetched_times)
     elif weather_source == "mixed":
-        meta["synthetic_reason"] = (
-            f"{total - api_count} farm(s) used scenario fallback after API failure"
-        )
+        if stale_count > 0:
+            meta["fallback_mode"] = "partial_stale_cache"
+            parts: list[str] = []
+            if stale_count:
+                parts.append(
+                    f"{stale_count} farm(s) showing cached readings (API unavailable)"
+                )
+            if synthetic_count:
+                parts.append(
+                    f"{synthetic_count} farm(s) using live_weather fallback (no cache)"
+                )
+            meta["weather_disclaimer"] = STALE_READING_DISCLAIMER
+            meta["synthetic_reason"] = "; ".join(parts)
+        else:
+            meta["fallback_mode"] = "partial_live_weather"
+            meta["synthetic_reason"] = (
+                f"{total - api_count} farm(s) used live_weather fallback after API failure"
+            )
 
-    if base_temps and scenario_modifier_applied and weather_source in ("openweather", "mixed"):
+    if base_temps and scenario_modifier_applied and weather_source in (
+        "openweather",
+        "mixed",
+        "stale_cache",
+    ):
         meta["temperature_c_base"] = _avg(base_temps)
         meta["rainfall_mm_base"] = round(max(base_rains), 1) if base_rains else 0.0
 
@@ -384,34 +667,19 @@ async def fetch_weather(
 
     if not api_key:
         logger.info(
-            "OPENWEATHER_API_KEY missing; using scenario overlays for all farms (scenario=%s)",
+            "OPENWEATHER_API_KEY missing; live_weather fallback for all farms "
+            "(requested scenario=%s)",
             st,
         )
-        events = [
-            _event_from_readings(f, 0.0, _NORMAL_TEMP_C, scenario_type=scenario_type)
-            for f in farms
-        ]
-        farm_meta = [
-            {
-                "farm_id": f.id,
-                "api_used": False,
-                "base_rain_mm": 0.0,
-                "base_temp_c": _NORMAL_TEMP_C,
-                "adjusted_rain_mm": float(e.precipitation_mm or 0),
-                "adjusted_temp_c": _parse_temp_from_desc(e.description) or _NORMAL_TEMP_C,
-            }
-            for f, e in zip(farms, events)
-        ]
-        for fm, event in zip(farm_meta, events):
-            fm["severity"] = event.severity
-            fm["description"] = event.description
-            fm["precipitation_mm"] = float(event.precipitation_mm or 0)
-        meta = _aggregate_farm_meta(farm_meta, st)
-        meta["synthetic_reason"] = "OPENWEATHER_API_KEY is not configured"
+        events, meta = _live_weather_fallback_batch(
+            farms,
+            requested_scenario=st,
+            synthetic_reason="OPENWEATHER_API_KEY is not configured",
+        )
         return {"events": events, "meta": meta}
 
-    r = await _redis_client()
     try:
+        r = await _redis_client()
         async with httpx.AsyncClient() as http:
             tasks = [
                 _fetch_farm_readings(farm, api_key, r, http, scenario_type)
@@ -419,28 +687,12 @@ async def fetch_weather(
             ]
             pairs = await asyncio.gather(*tasks)
     except Exception as exc:  # noqa: BLE001
-        logger.error("fetch_weather: unexpected error — scenario overlay fallback: %s", exc)
-        events = [
-            _event_from_readings(f, 0.0, _NORMAL_TEMP_C, scenario_type=scenario_type)
-            for f in farms
-        ]
-        farm_meta = [
-            {
-                "farm_id": f.id,
-                "api_used": False,
-                "base_rain_mm": 0.0,
-                "base_temp_c": _NORMAL_TEMP_C,
-                "adjusted_rain_mm": float(e.precipitation_mm or 0),
-                "adjusted_temp_c": _parse_temp_from_desc(e.description) or _NORMAL_TEMP_C,
-            }
-            for f, e in zip(farms, events)
-        ]
-        for fm, event in zip(farm_meta, events):
-            fm["severity"] = event.severity
-            fm["description"] = event.description
-            fm["precipitation_mm"] = float(event.precipitation_mm or 0)
-        meta = _aggregate_farm_meta(farm_meta, st)
-        meta["synthetic_reason"] = f"Unexpected fetch error: {exc}"
+        logger.error("fetch_weather: unexpected error — live_weather fallback: %s", exc)
+        events, meta = _live_weather_fallback_batch(
+            farms,
+            requested_scenario=st,
+            synthetic_reason=f"Unexpected fetch error: {exc}",
+        )
         return {"events": events, "meta": meta}
 
     events = [p[0] for p in pairs]

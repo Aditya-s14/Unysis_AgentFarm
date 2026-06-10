@@ -6,10 +6,12 @@ Graph topology
     START
       │
     entry (orchestrator_entry)
-      ├──────────┐
-    weather    demand          ← parallel fan-out
-      └────┬───┘
-         merge               ← fan-in: waits for both, no-op passthrough
+      │
+    weather                   ← runs first (fallback → live_weather)
+      │
+    merge                     ← applies effective scenario after weather
+      │
+    demand
            │
         inventory
            │
@@ -59,7 +61,7 @@ from agents import (
 from agents.metrics import compute_kpi_delta
 from agents.review_flags import max_retries, needs_human_review
 from memory.state import AgentFarmState, AgentTrace, initial_agent_farm_state
-from models.schemas import DemandPoint, Farm, Plan, Truck
+from models.schemas import DemandPoint, Farm, Plan, RoutePlan, Truck, ValidationResult
 
 logger = logging.getLogger(__name__)
 
@@ -100,9 +102,46 @@ def _make_node(
 # Inline graph nodes
 # ---------------------------------------------------------------------------
 
-async def merge_node(state: AgentFarmState) -> dict:  # noqa: ARG001
-    """Fan-in join point after parallel weather + demand; pure pass-through."""
+async def merge_node(state: AgentFarmState) -> dict:
+    """After weather: apply live_weather effective scenario when API fallback was used."""
+    from tools.scenario_effects import LIVE
+
+    meta = state.get("weather_fetch_meta") or {}
+    if meta.get("weather_source") == "synthetic_fallback":
+        return {"scenario_type": LIVE}
     return {}
+
+
+def _entry_router(state: AgentFarmState) -> str:
+    """Skip agent pipeline when required inputs are missing."""
+    if state.get("pipeline_blocked"):
+        return "blocked"
+    return "parallel"
+
+
+async def blocked_plan_node(state: AgentFarmState) -> dict:
+    """Short-circuit when farms, demand points, or trucks are missing."""
+    t0 = datetime.now(timezone.utc)
+    errors = list(state.get("input_errors") or ["pipeline blocked: missing required inputs"])
+    trace: AgentTrace = {
+        "agent_name": "blocked_plan",
+        "start_time": t0.isoformat(),
+        "end_time": datetime.now(timezone.utc).isoformat(),
+        "tools_used": [],
+        "notes": f"pipeline_blocked errors={errors}",
+        "token_count": None,
+    }
+    return {
+        "agent_traces": [trace],
+        "route_plan": RoutePlan(routes=[], notes="blocked: insufficient inputs"),
+        "validation_result": ValidationResult(
+            valid=False,
+            errors=errors,
+            warnings=["pipeline_skipped: logistics and validator not run"],
+        ),
+        "retry_count": max_retries(),
+        "human_review": True,
+    }
 
 
 async def _bump_relaxation_node(state: AgentFarmState) -> dict:
@@ -179,10 +218,16 @@ def _validate_router(state: AgentFarmState) -> str:
 
 graph: StateGraph = StateGraph(AgentFarmState)
 
-graph.add_node("entry",     _make_node(_orchestrator_module.orchestrator_entry, ["run_id", "retry_count"], name="entry"))
+graph.add_node("entry",     _make_node(_orchestrator_module.orchestrator_entry, ["run_id", "retry_count", "pipeline_blocked", "input_errors"], name="entry"))
+graph.add_node("blocked",   blocked_plan_node)
+graph.add_node("parallel_gate", merge_node)
 graph.add_node(
     "weather",
-    _make_node(weather_agent, ["weather_events", "weather_risk_summary", "weather_fetch_meta"], name="weather"),
+    _make_node(
+        weather_agent,
+        ["weather_events", "weather_risk_summary", "weather_fetch_meta", "scenario_type"],
+        name="weather",
+    ),
 )
 graph.add_node("demand",    _make_node(demand_agent,    ["demand_forecast"], name="demand"))
 graph.add_node("merge",     merge_node)
@@ -196,16 +241,20 @@ graph.add_node("persist",   persist_node)
 # --- Edge wiring ---
 graph.add_edge(START, "entry")
 
-# Parallel fan-out: both weather and demand receive the post-entry state
-graph.add_edge("entry", "weather")
-graph.add_edge("entry", "demand")
+graph.add_conditional_edges(
+    "entry",
+    _entry_router,
+    {"blocked": "blocked", "parallel": "parallel_gate"},
+)
+graph.add_edge("parallel_gate", "weather")
+graph.add_edge("blocked", "exit")
 
-# Fan-in: merge waits for both branches
+# Weather before demand so fallback effective scenario applies to forecast
 graph.add_edge("weather", "merge")
-graph.add_edge("demand",  "merge")
+graph.add_edge("merge", "demand")
 
 # Linear pipeline
-graph.add_edge("merge",     "inventory")
+graph.add_edge("demand",    "inventory")
 graph.add_edge("inventory", "logistics")
 graph.add_edge("logistics", "validate")
 

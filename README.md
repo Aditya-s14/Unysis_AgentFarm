@@ -36,10 +36,9 @@ flowchart TB
     EXIT["Orchestrator exit"]
     PERSIST["Persist KPIs"]
     ENTRY --> W
-    ENTRY --> D
     W --> MERGE
-    D --> MERGE
-    MERGE --> INV
+    MERGE --> D
+    D --> INV
     INV --> LOG
     LOG --> VAL
     VAL -->|valid| EXIT
@@ -68,9 +67,11 @@ flowchart TB
   ADV --> RD
 ```
 
-**How it works:** The orchestrator validates inputs and loads run context. Weather and Demand run **in parallel** (fan-out), then Inventory and Logistics build an optimized plan. The Validator applies rule-based feasibility checks; on failure, Logistics re-solves with relaxed demand (up to two retries). The orchestrator exit packages the plan, KPIs vs a naive baseline, and a **weather snapshot** (per-farm OpenWeather readings in Postgres + Redis). The **Farmer Advisor** is a separate service that reads finished plans and stored weather from Postgres/Redis and answers follow-up questions with optional LLM + Redis session history.
+**How it works:** The orchestrator validates inputs and loads run context. **Weather runs first**, then Demand (so API fallbacks can switch the effective scenario to `live_weather` before forecasting). Inventory and Logistics build an optimized plan. The Validator applies rule-based feasibility checks; on failure, Logistics re-solves with relaxed demand (up to two retries). The orchestrator exit packages the plan, KPIs vs a naive baseline, and a **weather snapshot** (per-farm OpenWeather readings in Postgres + Redis). The **Farmer Advisor** is a separate service that reads finished plans and stored weather from Postgres/Redis and answers follow-up questions with optional LLM + Redis session history.
 
 > **Note:** OR-Tools solves a **capacitated VRP** with per-route distance limits. Truck availability and timing-style checks run in the **Validator** after solving—not as OR-Tools time-window dimensions.
+
+For **resilience and fallback chains** (weather, routing, LLM, DB, Redis, validator retry), see [FallbackHandling.md](FallbackHandling.md) (detailed) or [ARCHITECTURE.md](ARCHITECTURE.md) (overview).
 
 ---
 
@@ -79,7 +80,7 @@ flowchart TB
 | Agent | Role | LLM? | Primary tools |
 |-------|------|------|----------------|
 | **Orchestrator** | Validates inputs, resolves conflicts, packages final plan | No | LangGraph state graph |
-| **Weather** | Fetches OpenWeather current + 24h forecast **per farm** (not mandis), classifies risk (normal / warning / severe). Falls back to synthetic scenario overlays if no API key. | No | OpenWeatherMap API (optional), Redis cache |
+| **Weather** | Fetches OpenWeather current + 24h forecast **per farm** (not mandis), classifies risk (normal / warning / severe). On API failure, falls back to **live_weather rules** (not scripted heat/monsoon overlays). | No | OpenWeatherMap API (optional), Redis cache |
 | **Demand forecast** | 7-day demand per mandi; festival rules + optional LLM; bias correction from outcome store | Yes (optional) | Outcome store, LLM (OpenRouter / OpenAI) |
 | **Inventory** | Spoilage windows from crop and temperature; optional LLM for prioritisation | Yes (optional) | Temperature-adjusted shelf life |
 | **Logistics** | Capacitated VRP with distance limits; Haversine (×1.3) or Google Maps distance matrix | No | OR-Tools, distance matrix cache |

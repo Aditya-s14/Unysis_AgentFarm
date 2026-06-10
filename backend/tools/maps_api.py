@@ -165,6 +165,26 @@ async def _google_pair_km(
         return None
 
 
+async def _cache_get(r: redis.Redis | None, key: str) -> float | None:
+    if r is None:
+        return None
+    try:
+        raw = await r.get(key)
+        return float(raw) if raw is not None else None
+    except Exception as exc:
+        logger.debug("distance cache get failed: %s", exc)
+        return None
+
+
+async def _cache_set(r: redis.Redis | None, key: str, km: float) -> None:
+    if r is None:
+        return
+    try:
+        await r.set(key, f"{km:.6f}", ex=DIST_CACHE_TTL_S)
+    except Exception as exc:
+        logger.debug("distance cache set failed: %s", exc)
+
+
 async def get_distance_matrix(
     origins: list[tuple[float, float]],
     destinations: list[tuple[float, float]],
@@ -186,7 +206,12 @@ async def get_distance_matrix(
     n_o, n_d = len(origins), len(destinations)
     out: list[list[float]] = [[0.0] * n_d for _ in range(n_o)]
 
-    r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+    r: redis.Redis | None = None
+    try:
+        r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+    except Exception as exc:
+        logger.warning("distance matrix: Redis unavailable, skipping cache (%s)", exc)
+
     sem = asyncio.Semaphore(_GOOGLE_CONCURRENCY)
     ors_sem = asyncio.Semaphore(_ORS_CONCURRENCY)
 
@@ -201,24 +226,23 @@ async def get_distance_matrix(
 
                 cache_key = _pair_cache_key(a, b)
 
-                # Cache hit — no API call needed
-                raw = await r.get(cache_key)
-                if raw is not None:
-                    return i, j, float(raw)
+                cached = await _cache_get(r, cache_key)
+                if cached is not None:
+                    return i, j, cached
 
                 # Primary: hosted OpenRouteService (free, no setup)
                 if ors_key:
                     async with ors_sem:
                         o = await _ors_pair_km(http_client, ors_key, a, b)
                     if o is not None:
-                        await r.set(cache_key, f"{o:.6f}", ex=DIST_CACHE_TTL_S)
+                        await _cache_set(r, cache_key, o)
                         return i, j, o
 
                 # Secondary: self-hosted OSRM (if anyone prepped it)
                 if osrm_url:
                     o = await _osrm_pair_km(http_client, osrm_url, a, b)
                     if o is not None:
-                        await r.set(cache_key, f"{o:.6f}", ex=DIST_CACHE_TTL_S)
+                        await _cache_set(r, cache_key, o)
                         return i, j, o
 
                 # Live Google Maps call (rate-limited by semaphore)
@@ -226,15 +250,14 @@ async def get_distance_matrix(
                     async with sem:
                         g = await _google_pair_km(http_client, api_key, a, b)
                     if g is not None:
-                        await r.set(cache_key, f"{g:.6f}", ex=DIST_CACHE_TTL_S)
+                        await _cache_set(r, cache_key, g)
                         return i, j, g
 
-                # Haversine fallback (also cached so subsequent runs are instant)
+                # Haversine fallback (also cached when Redis is up)
                 d = haversine_km(a, b)
-                await r.set(cache_key, f"{d:.6f}", ex=DIST_CACHE_TTL_S)
+                await _cache_set(r, cache_key, d)
                 return i, j, d
 
-            # Fire all pairs concurrently
             pairs = [
                 _resolve_pair(i, j)
                 for i in range(n_o)
@@ -246,7 +269,8 @@ async def get_distance_matrix(
             out[i][j] = d
 
     finally:
-        await r.aclose()
+        if r is not None:
+            await r.aclose()
 
     logger.debug(
         "get_distance_matrix: %dx%d matrix resolved (%d pairs)",

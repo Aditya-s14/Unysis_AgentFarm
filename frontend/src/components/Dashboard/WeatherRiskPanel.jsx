@@ -1,6 +1,7 @@
 import {
   conditionLabel,
   formatRainfallDisplay,
+  formatReadingAge,
   getWeatherSourceMode,
   riskColor,
   weatherHeadline,
@@ -50,6 +51,14 @@ function SourceBadges({ data }) {
           Scenario Adjustment ({adj})
         </SourceBadge>
       </div>
+    );
+  }
+
+  if (mode === 'stale') {
+    return (
+      <SourceBadge color="#FF9800" borderColor="#FF9800" title={tooltip}>
+        Last Known Weather
+      </SourceBadge>
     );
   }
 
@@ -109,6 +118,8 @@ export default function WeatherRiskPanel({ data }) {
 
   const mode = getWeatherSourceMode(data);
   const headline = weatherHeadline(data);
+  const readingAge = formatReadingAge(data.reading_fetched_at);
+  const disclaimer = data.weather_disclaimer;
   const showBaseValues = mode === 'mixed' && (tempBase != null || rainBase != null);
   const rainDisplay = formatRainfallDisplay(data);
   const rainBaseDisplay = rainBase != null ? `${Number(rainBase)} mm (24h)` : null;
@@ -162,6 +173,17 @@ export default function WeatherRiskPanel({ data }) {
       ) : (
         <p className="font-mono mb-3 m-0" style={{ fontSize: '12px', color: 'var(--muted)' }}>
           Weather data unavailable
+        </p>
+      )}
+
+      {(mode === 'stale' || disclaimer) && (
+        <p
+          className="font-mono mb-3 m-0"
+          style={{ fontSize: '11px', lineHeight: 1.5, color: '#FF9800' }}
+        >
+          {disclaimer
+            || "Couldn't fetch the current weather update; showing the most recently fetched reading."}
+          {readingAge ? ` (${readingAge})` : ''}
         </p>
       )}
 
