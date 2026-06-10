@@ -66,11 +66,14 @@ async def reroute_with_blockage(
 
     inputs = json.loads(raw)
     seg = body.blocked_segment
-    blocked = [{
+    # Accumulate with blockages from earlier reroutes in this chain — a
+    # second report must not unblock the first leg.
+    blocked = list(inputs.get("blocked_segments") or [])
+    blocked.append({
         "from": [seg.from_lat, seg.from_lng],
         "to": [seg.to_lat, seg.to_lng],
         "penalty": body.penalty_factor,
-    }]
+    })
 
     req = PipelineRequest(
         farms=[Farm(**f) for f in inputs["farms"]],
@@ -85,7 +88,8 @@ async def reroute_with_blockage(
         logger.exception("reroute: pipeline failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    # The new run is itself reroutable (multiple blockages stack by chaining).
+    # The new run is itself reroutable; the full blockage list rides along
+    # so chained reroutes keep every reported leg penalized.
     await stash_scenario_inputs(
         request,
         result.run_id,
@@ -93,6 +97,7 @@ async def reroute_with_blockage(
         farms=req.farms,
         demand_points=req.demand_points,
         trucks=req.trucks,
+        blocked_segments=blocked,
     )
 
     response = RunScenarioResponse(
@@ -110,6 +115,7 @@ async def reroute_with_blockage(
     response["reroute"] = {
         "previous_run_id": run_id,
         "blocked_segment": seg.model_dump(),
+        "active_blockages": len(blocked),
         "penalty_factor": body.penalty_factor,
         "requested_by": {"phone": user.get("sub"), "role": user.get("role")},
     }

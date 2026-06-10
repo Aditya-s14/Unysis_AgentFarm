@@ -28,14 +28,20 @@ async def stash_scenario_inputs(
     farms: list[Farm],
     demand_points: list[DemandPoint],
     trucks: list[Truck],
+    blocked_segments: list[dict] | None = None,
 ) -> None:
-    """Best-effort save of a run's inputs to Redis (reroute needs them)."""
+    """Best-effort save of a run's inputs to Redis (reroute needs them).
+
+    blocked_segments rides along so chained reroutes accumulate blockages
+    instead of forgetting earlier ones.
+    """
     try:
         payload = json.dumps({
             "scenario_type": scenario_type,
             "farms": [f.model_dump(mode="json") for f in farms],
             "demand_points": [d.model_dump(mode="json") for d in demand_points],
             "trucks": [t.model_dump(mode="json") for t in trucks],
+            "blocked_segments": blocked_segments or [],
         })
         await request.app.state.redis.set(
             f"{SCENARIO_INPUTS_PREFIX}{run_id}", payload, ex=SCENARIO_INPUTS_TTL_S,
