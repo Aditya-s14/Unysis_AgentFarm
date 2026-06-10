@@ -172,3 +172,5 @@ xxhash==3.7.0
     # via langsmith
 zstandard==0.25.0
     # via langsmith
+pyjwt==2.10.1
+    # via -r requirements.in

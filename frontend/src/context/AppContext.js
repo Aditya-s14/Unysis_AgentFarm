@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import { clearToken, getStoredUser, saveToken } from '@/utils/auth';
 
 /**
  * Application-wide state: current run id, advisor session id, and a draft
@@ -44,6 +45,7 @@ function safeWrite(key, value) {
 export function AppContextProvider({ children }) {
   const [currentRunId, setCurrentRunIdState] = useState(null);
   const [sessionId, setSessionId] = useState(null);
+  const [user, setUser] = useState(null);
   const [scenarioDraft, setScenarioDraft] = useState({
     scenarioType: 'monsoon_disruption',
     farms: [],
@@ -63,6 +65,8 @@ export function AppContextProvider({ children }) {
       safeWrite(SESSION_ID_KEY, storedSession);
     }
     setSessionId(storedSession);
+
+    setUser(getStoredUser());
   }, []);
 
   const setCurrentRunId = useCallback((id) => {
@@ -76,6 +80,17 @@ export function AppContextProvider({ children }) {
     setSessionId(next);
   }, []);
 
+  // T1: persist the JWT and expose the decoded user app-wide.
+  const login = useCallback((token, expiresInSeconds) => {
+    saveToken(token, expiresInSeconds);
+    setUser(getStoredUser());
+  }, []);
+
+  const logout = useCallback(() => {
+    clearToken();
+    setUser(null);
+  }, []);
+
   const value = useMemo(
     () => ({
       currentRunId,
@@ -84,8 +99,11 @@ export function AppContextProvider({ children }) {
       resetSession,
       scenarioDraft,
       setScenarioDraft,
+      user,
+      login,
+      logout,
     }),
-    [currentRunId, setCurrentRunId, sessionId, resetSession, scenarioDraft],
+    [currentRunId, setCurrentRunId, sessionId, resetSession, scenarioDraft, user, login, logout],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

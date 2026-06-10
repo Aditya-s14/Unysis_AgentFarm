@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from graph import PipelineRequest, PipelineResult, run_scenario
@@ -13,6 +14,34 @@ from models.schemas import DemandPoint, Farm, Plan, Truck
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# R4: original inputs per run, so /reroute can re-solve with a blockage.
+SCENARIO_INPUTS_PREFIX = "scenario_inputs:"
+SCENARIO_INPUTS_TTL_S = 86400
+
+
+async def stash_scenario_inputs(
+    request: Request,
+    run_id: str,
+    *,
+    scenario_type: str,
+    farms: list[Farm],
+    demand_points: list[DemandPoint],
+    trucks: list[Truck],
+) -> None:
+    """Best-effort save of a run's inputs to Redis (reroute needs them)."""
+    try:
+        payload = json.dumps({
+            "scenario_type": scenario_type,
+            "farms": [f.model_dump(mode="json") for f in farms],
+            "demand_points": [d.model_dump(mode="json") for d in demand_points],
+            "trucks": [t.model_dump(mode="json") for t in trucks],
+        })
+        await request.app.state.redis.set(
+            f"{SCENARIO_INPUTS_PREFIX}{run_id}", payload, ex=SCENARIO_INPUTS_TTL_S,
+        )
+    except Exception as exc:  # noqa: BLE001 — reroute degrades, runs must not fail
+        logger.warning("could not stash scenario inputs for %s: %s", run_id, exc)
 
 
 class _DemandPointIn(BaseModel):
@@ -88,7 +117,7 @@ def _validate_scenario_inputs(body: RunScenarioRequest) -> None:
 
 
 @router.post("/scenario/run", response_model=RunScenarioResponse)
-async def run_scenario_endpoint(body: RunScenarioRequest) -> RunScenarioResponse:
+async def run_scenario_endpoint(body: RunScenarioRequest, request: Request) -> RunScenarioResponse:
     """Run the full multi-agent pipeline and return the optimised plan + KPIs."""
     _validate_scenario_inputs(body)
     try:
@@ -99,6 +128,14 @@ async def run_scenario_endpoint(body: RunScenarioRequest) -> RunScenarioResponse
             scenario_type=body.scenario_type,
         )
         result: PipelineResult = await run_scenario(req)
+        await stash_scenario_inputs(
+            request,
+            result.run_id,
+            scenario_type=body.scenario_type,
+            farms=req.farms,
+            demand_points=req.demand_points,
+            trucks=req.trucks,
+        )
         return RunScenarioResponse(
             run_id=result.run_id,
             plan=result.plan,

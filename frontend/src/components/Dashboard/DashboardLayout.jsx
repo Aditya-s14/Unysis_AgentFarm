@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
+import { useAppContext } from '@/context/AppContext';
 
 /**
  * DashboardLayout — recovered sidebar shell shared by every operator page.
@@ -9,7 +10,13 @@ import { useState } from 'react';
  */
 export default function DashboardLayout({ children, title, subtitle }) {
   const router = useRouter();
+  const { user, logout } = useAppContext();
   const [collapsed, setCollapsed] = useState(false);
+
+  const handleSignOut = () => {
+    logout();
+    router.push('/login');
+  };
 
   const navItems = [
     { href: '/',          label: 'Home',      icon: HomeIcon },
@@ -84,6 +91,38 @@ export default function DashboardLayout({ children, title, subtitle }) {
             );
           })}
         </nav>
+
+        {/* signed-in identity + sign out (T1/F2) */}
+        {user && (
+          <div className="px-3 py-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.25)' }}>
+            {!collapsed && (
+              <p className="px-3 pb-2 text-[11px] leading-tight" style={{ color: 'var(--text-tertiary)' }}>
+                <span className="font-semibold" style={{ color: 'var(--navy)' }}>
+                  {user.name || user.phone}
+                </span>
+                <br />
+                {user.role}
+                {user.entityId ? ` · ${user.entityId}` : ''}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg transition-all"
+              style={{ color: 'var(--text-tertiary)', background: 'transparent', border: 'none', fontSize: '12px' }}
+            >
+              <svg
+                width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              {!collapsed && <span>Sign out</span>}
+            </button>
+          </div>
+        )}
 
         {/* collapse toggle */}
         <div className="px-3 py-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.25)' }}>

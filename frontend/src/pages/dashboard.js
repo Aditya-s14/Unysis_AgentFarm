@@ -143,6 +143,7 @@ export default function DashboardPage() {
         id: `${r.truck_id || idx}`,
         truckId: r.truck_id,
         distance_km: r.distance_km,
+        geometry: r.geometry || null,
         stops: r.stops
           .slice()
           .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))

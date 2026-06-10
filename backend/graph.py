@@ -292,6 +292,8 @@ class PipelineRequest:
     trucks: list[Truck]
     scenario_type: str = "default"
     run_id: str | None = None
+    # R4: legs to penalize, [{"from": [lat,lng], "to": [lat,lng], "penalty": float}]
+    blocked_segments: list[dict] | None = None
 
 
 @dataclass
@@ -328,6 +330,8 @@ async def run_scenario(request: PipelineRequest) -> PipelineResult:
     state["farms"] = request.farms
     state["demand_points"] = request.demand_points
     state["trucks"] = request.trucks
+    if request.blocked_segments:
+        state["blocked_segments"] = request.blocked_segments
 
     logger.info("run_scenario start run_id=%s scenario=%s", run_id, request.scenario_type)
     result: AgentFarmState = await compiled_graph.ainvoke(state)

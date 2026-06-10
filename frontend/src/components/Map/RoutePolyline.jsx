@@ -15,7 +15,11 @@ const FADED  = '#8A9E8C';
 export default function RoutePolyline({ route, isSelected = false, isDeemphasized = false }) {
   if (!route?.stops || route.stops.length < 2) return null;
 
-  const positions = route.stops.map((s) => [s.lat, s.lng]);
+  // Road-snapped geometry from the backend (T7); straight stop-to-stop
+  // lines when no routing provider was available.
+  const positions = Array.isArray(route.geometry) && route.geometry.length >= 2
+    ? route.geometry
+    : route.stops.map((s) => [s.lat, s.lng]);
 
   let pathOptions;
   if (isSelected) {

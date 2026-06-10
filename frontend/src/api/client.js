@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL, formatApiError } from '@/utils/api';
+import { clearToken, readToken } from '@/utils/auth';
 
 /**
  * Shared axios instance for the AgentFarm backend.
@@ -14,14 +15,48 @@ const client = axios.create({
   },
 });
 
+// Attach the JWT to every request (T1).
+client.interceptors.request.use((config) => {
+  const token = readToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 client.interceptors.response.use(
   (response) => response,
   (error) => {
     // eslint-disable-next-line no-console
     console.error('[AgentFarm API]', formatApiError(error));
+    // Expired/invalid session → back to login (skip auth endpoints, where
+    // a 401 just means "wrong code", and skip when already on /login).
+    const status = error?.response?.status;
+    const url = error?.config?.url || '';
+    if (
+      status === 401 &&
+      !url.includes('/auth/') &&
+      typeof window !== 'undefined' &&
+      !window.location.pathname.startsWith('/login')
+    ) {
+      clearToken();
+      window.location.assign('/login');
+    }
     return Promise.reject(error);
   },
 );
+
+/** POST /api/auth/request-otp — ask for a one-time code. */
+export async function requestOtp(phone) {
+  const { data } = await client.post('/auth/request-otp', { phone });
+  return data;
+}
+
+/** POST /api/auth/verify-otp — exchange the code for a JWT. */
+export async function verifyOtp(phone, code) {
+  const { data } = await client.post('/auth/verify-otp', { phone, code });
+  return data;
+}
 
 /** POST /api/scenario/run — kick off the full agent pipeline. */
 export async function runScenario(body) {
