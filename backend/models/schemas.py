@@ -12,6 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field, RootModel
 # --- Inputs ---
 
 
+NotifyChannel = Literal["sms", "voice", "both", "none"]
+
+
 class Farm(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -24,6 +27,10 @@ class Farm(BaseModel):
     typical_yield_kg: float = Field(ge=0)
     harvest_window_start: date
     harvest_window_end: date
+    phone: str | None = None
+    preferred_language: str = "en"
+    notify_channel: NotifyChannel = "sms"
+    notify_opt_in: bool = False
 
 
 class DemandPoint(BaseModel):
@@ -45,6 +52,7 @@ class Truck(BaseModel):
     cost_per_km: float = Field(ge=0)
     availability_start: time
     availability_end: time
+    driver_phone: str | None = None
 
 
 # --- Agent outputs ---

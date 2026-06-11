@@ -1,4 +1,4 @@
-﻿import Head from 'next/head';
+import Head from 'next/head';
 import Link from 'next/link';
 import { useMemo, useRef, useState } from 'react';
 import {
@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import DashboardLayout from '@/components/Dashboard/DashboardLayout';
 import OverviewPanel from '@/components/Dashboard/OverviewPanel';
+import FpoApprovalPanel from '@/components/Dashboard/FpoApprovalPanel';
 import WeatherRiskPanel from '@/components/Dashboard/WeatherRiskPanel';
 import KPIGrid from '@/components/KPICards/KPIGrid';
 import { resolveWeatherPanel } from '@/utils/weatherSummary';
@@ -320,6 +321,31 @@ export default function DashboardPage() {
       <Head><title>Dashboard | AgentFarm</title></Head>
       <DashboardLayout title="Dashboard" subtitle={`Run ${runId?.slice(0, 8) || EM_DASH}`}>
         <OverviewPanel lastRun={lastRun} />
+
+        {runId && (
+          <FpoApprovalPanel
+            runId={runId}
+            approvalStatus={cached?.approval_status}
+            humanReview={cached?.human_review}
+            onApproved={(resp) => {
+              if (typeof window === 'undefined' || !cached) return;
+              try {
+                const merged = {
+                  ...cached,
+                  approval_status: resp.approval_status,
+                  approved_at: resp.approved_at,
+                  notifications_dispatched_at: resp.notifications_dispatched_at,
+                };
+                window.localStorage.setItem(
+                  'agentfarm_last_response',
+                  JSON.stringify(merged),
+                );
+              } catch {
+                /* non-fatal */
+              }
+            }}
+          />
+        )}
 
         {cached && activeTab === 'overview' && (
           <div className="mt-6">

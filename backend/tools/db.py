@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import uuid
 from collections.abc import AsyncIterator
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +22,7 @@ from models.db_models import (
     Base,
     DemandPointRow,
     FarmRow,
+    NotificationLogRow,
     PlanOutcomeRow,
     PlanTable,
     RunLogRow,
@@ -114,6 +115,36 @@ async def _ensure_plan_outcome_memory_columns(conn: Any) -> None:
         await conn.execute(text(ddl))
 
 
+async def _ensure_farm_notification_columns(conn: Any) -> None:
+    """Add optional farmer contact columns to existing ``farms`` tables."""
+    stmts = [
+        "ALTER TABLE farms ADD COLUMN IF NOT EXISTS phone VARCHAR(32)",
+        "ALTER TABLE farms ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(8) DEFAULT 'en'",
+        "ALTER TABLE farms ADD COLUMN IF NOT EXISTS notify_channel VARCHAR(16) DEFAULT 'sms'",
+        "ALTER TABLE farms ADD COLUMN IF NOT EXISTS notify_opt_in BOOLEAN DEFAULT FALSE",
+    ]
+    for ddl in stmts:
+        await conn.execute(text(ddl))
+
+
+async def _ensure_truck_driver_phone_column(conn: Any) -> None:
+    stmts = [
+        "ALTER TABLE trucks ADD COLUMN IF NOT EXISTS driver_phone VARCHAR(32)",
+    ]
+    for ddl in stmts:
+        await conn.execute(text(ddl))
+
+
+async def _ensure_plan_approval_columns(conn: Any) -> None:
+    stmts = [
+        "ALTER TABLE plans ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ",
+        "ALTER TABLE plans ADD COLUMN IF NOT EXISTS approved_by VARCHAR(64)",
+        "ALTER TABLE plans ADD COLUMN IF NOT EXISTS notifications_dispatched_at TIMESTAMPTZ",
+    ]
+    for ddl in stmts:
+        await conn.execute(text(ddl))
+
+
 async def init_db() -> None:
     """Create async engine, session factory, and all tables."""
     global _engine, _session_maker
@@ -124,6 +155,9 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
         if "postgresql" in settings.DATABASE_URL:
             await _ensure_plan_outcome_memory_columns(conn)
+            await _ensure_farm_notification_columns(conn)
+            await _ensure_truck_driver_phone_column(conn)
+            await _ensure_plan_approval_columns(conn)
 
 
 async def backfill_outcome_dims_from_csv() -> None:
@@ -161,6 +195,12 @@ def _parse_date(value: str) -> date:
     return date.fromisoformat(value.strip())
 
 
+def _parse_bool(value: str | None, default: bool = False) -> bool:
+    if value is None or not str(value).strip():
+        return default
+    return str(value).strip().lower() in ("1", "true", "yes", "y")
+
+
 async def _seed_master_from_csv(session: AsyncSession, root: Path) -> None:
     farms_csv = root / "sample_farms.csv"
     demand_csv = root / "sample_demand.csv"
@@ -181,6 +221,10 @@ async def _seed_master_from_csv(session: AsyncSession, root: Path) -> None:
                         typical_yield_kg=float(row["typical_yield_kg"]),
                         harvest_window_start=_parse_date(row["harvest_window_start"]),
                         harvest_window_end=_parse_date(row["harvest_window_end"]),
+                        phone=(row.get("phone") or "").strip() or None,
+                        preferred_language=(row.get("preferred_language") or "en").strip(),
+                        notify_channel=(row.get("notify_channel") or "sms").strip(),
+                        notify_opt_in=_parse_bool(row.get("notify_opt_in")),
                     )
                 )
 
@@ -210,6 +254,7 @@ async def _seed_master_from_csv(session: AsyncSession, root: Path) -> None:
                         cost_per_km=float(row["cost_per_km"]),
                         availability_start=_parse_time(row["availability_start"]),
                         availability_end=_parse_time(row["availability_end"]),
+                        driver_phone=(row.get("driver_phone") or "").strip() or None,
                     )
                 )
 
@@ -470,3 +515,83 @@ async def list_outcomes_for_plan(plan_id: uuid.UUID) -> list[PlanOutcomeRow]:
 async def get_plan_outcome(outcome_id: uuid.UUID) -> PlanOutcomeRow | None:
     async with get_session_maker()() as session:
         return await session.get(PlanOutcomeRow, outcome_id)
+
+
+async def create_notification_log(
+    *,
+    run_id: str,
+    plan_id: uuid.UUID | None,
+    farm_id: str | None,
+    channel: str,
+    phone: str,
+    message_body: str,
+    priority: str,
+    provider: str,
+    provider_message_id: str | None = None,
+    status: str,
+    error: str | None = None,
+) -> NotificationLogRow:
+    async with get_session_maker()() as session:
+        row = NotificationLogRow(
+            run_id=run_id,
+            plan_id=plan_id,
+            farm_id=farm_id,
+            channel=channel,
+            phone=phone,
+            message_body=message_body,
+            priority=priority,
+            provider=provider,
+            provider_message_id=provider_message_id,
+            status=status,
+            error=error,
+        )
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
+        return row
+
+
+async def list_notifications_for_run(run_id: str) -> list[NotificationLogRow]:
+    async with get_session_maker()() as session:
+        r = await session.execute(
+            select(NotificationLogRow)
+            .where(NotificationLogRow.run_id == run_id)
+            .order_by(NotificationLogRow.created_at),
+        )
+        return list(r.scalars().all())
+
+
+async def get_plan_run_detail(run_id: str) -> dict[str, Any] | None:
+    """Return ``detail_json`` from the plan_run_complete log for *run_id*."""
+    rows = await list_run_logs_for_run(run_id)
+    for row in reversed(rows):
+        if row.message == "plan_run_complete" and row.detail_json:
+            return dict(row.detail_json)
+    return None
+
+
+async def mark_plan_approved(
+    plan_id: uuid.UUID,
+    *,
+    approved_by: str = "fpo",
+) -> PlanTable | None:
+    async with get_session_maker()() as session:
+        row = await session.get(PlanTable, plan_id)
+        if row is None:
+            return None
+        row.approved_at = datetime.now(timezone.utc)
+        row.approved_by = approved_by
+        await session.commit()
+        await session.refresh(row)
+        return row
+
+
+async def mark_notifications_dispatched(plan_id: uuid.UUID) -> PlanTable | None:
+    async with get_session_maker()() as session:
+        row = await session.get(PlanTable, plan_id)
+        if row is None:
+            return None
+        row.notifications_dispatched_at = datetime.now(timezone.utc)
+        await session.commit()
+        await session.refresh(row)
+        return row

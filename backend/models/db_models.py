@@ -6,6 +6,7 @@ import uuid
 from datetime import date, datetime, time
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     Float,
@@ -40,6 +41,22 @@ class FarmRow(Base):
     typical_yield_kg: Mapped[float] = mapped_column(Float, nullable=False)
     harvest_window_start: Mapped[date] = mapped_column(Date, nullable=False)
     harvest_window_end: Mapped[date] = mapped_column(Date, nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    preferred_language: Mapped[str] = mapped_column(
+        String(8),
+        nullable=False,
+        insert_default="en",
+    )
+    notify_channel: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        insert_default="sms",
+    )
+    notify_opt_in: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        insert_default=False,
+    )
 
 
 class DemandPointRow(Base):
@@ -61,6 +78,7 @@ class TruckRow(Base):
     cost_per_km: Mapped[float] = mapped_column(Float, nullable=False)
     availability_start: Mapped[time] = mapped_column(Time, nullable=False)
     availability_end: Mapped[time] = mapped_column(Time, nullable=False)
+    driver_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class PlanTable(Base):
@@ -84,6 +102,15 @@ class PlanTable(Base):
         insert_default=lambda: {},
     )
     validation_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    approved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    notifications_dispatched_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -169,3 +196,34 @@ class PlanOutcomeRow(Base):
     )
 
     plan: Mapped[PlanTable] = relationship("PlanTable", back_populates="outcomes")
+
+
+class NotificationLogRow(Base):
+    __tablename__ = "notification_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=_uuidpk,
+    )
+    run_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    plan_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("plans.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    farm_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    message_body: Mapped[str] = mapped_column(Text, nullable=False)
+    priority: Mapped[str] = mapped_column(String(16), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )

@@ -35,6 +35,18 @@ export async function getRun(runId) {
   return data;
 }
 
+/** POST /api/run/:id/approve — FPO sign-off; dispatch farmer + driver notifications. */
+export async function approveRun(runId, body = {}) {
+  const { data } = await client.post(`/run/${runId}/approve`, body);
+  return data;
+}
+
+/** GET /api/run/:id/notifications — notification audit log. */
+export async function getRunNotifications(runId) {
+  const { data } = await client.get(`/run/${runId}/notifications`);
+  return data;
+}
+
 /** GET /api/run/:id/traces — fetch per-agent reasoning traces. */
 export async function getRunTraces(runId) {
   const { data } = await client.get(`/run/${runId}/traces`);

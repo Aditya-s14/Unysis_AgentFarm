@@ -8,7 +8,9 @@ Agentic AI for sustainable agri supply chains in India — predicts disruptions,
 
 India loses an estimated **30–40% of its fresh produce** between farm and market each year. Smallholder farmers and local distributors lack the forecasting, routing, and real-time advisory tools that large agribusinesses use. Weather disruptions (monsoon floods, heatwaves), demand volatility around festivals, and fragmented mandi logistics compound the problem — food spoils while other mandis go under-supplied.
 
-**AgentFarm Optimizer** is a multi-agent AI system that autonomously senses disruptions, optimizes a plan across the supply chain, and explains it back to the farmer in plain language.
+Many farmers and truck drivers operate **without reliable internet** (feature phones, no data plan). A plan computed in a connected control room is useless in the field unless pickup instructions reach people on **cellular SMS and optional voice** — the last-mile channel when dashboards and apps are unreachable.
+
+**AgentFarm Optimizer** is a multi-agent AI system that autonomously senses disruptions, optimizes a plan across the supply chain, explains it back to the farmer in plain language, and — after **FPO approval** — dispatches pickup alerts to farmers and route assignments to drivers.
 
 ---
 
@@ -57,6 +59,12 @@ flowchart TB
     ADV["Farmer Advisor API"]
   end
 
+  subgraph notify["Last-mile comms (offline field)"]
+    FPO["FPO approval gateway"]
+    SMS["SMS / voice → farmers + drivers"]
+    NLOG[("notification_logs")]
+  end
+
   UI --> GW
   GW --> ENTRY
   PERSIST --> PG
@@ -65,9 +73,15 @@ flowchart TB
   GW --> ADV
   ADV --> PG
   ADV --> RD
+  PERSIST --> FPO
+  FPO -->|Approve & Notify| SMS
+  SMS --> NLOG
+  NLOG --> PG
 ```
 
-**How it works:** The orchestrator validates inputs and loads run context. **Weather runs first**, then Demand (so API fallbacks can switch the effective scenario to `live_weather` before forecasting). Inventory and Logistics build an optimized plan. The Validator applies rule-based feasibility checks; on failure, Logistics re-solves with relaxed demand (up to two retries). The orchestrator exit packages the plan, KPIs vs a naive baseline, and a **weather snapshot** (per-farm OpenWeather readings in Postgres + Redis). The **Farmer Advisor** is a separate service that reads finished plans and stored weather from Postgres/Redis and answers follow-up questions with optional LLM + Redis session history.
+**How it works:** The orchestrator validates inputs and loads run context. **Weather runs first**, then Demand (so API fallbacks can switch the effective scenario to `live_weather` before forecasting). Inventory and Logistics build an optimized plan. The Validator applies rule-based feasibility checks; on failure, Logistics re-solves with relaxed demand (up to two retries). The orchestrator exit packages the plan, KPIs vs a naive baseline, a **weather snapshot** (per-farm OpenWeather readings in Postgres + Redis), and a **scenario snapshot** (needed to rebuild notification context). When `NOTIFY_ENABLED=true`, farmer and driver alerts are **held** until the FPO officer clicks **Approve & Notify** on the dashboard (`POST /api/run/{run_id}/approve`); then SMS (and voice for urgent spoilage) goes out via a cellular provider — **no internet required on the farmer’s phone**. The **Farmer Advisor** is a separate service that reads finished plans and stored weather from Postgres/Redis and answers follow-up questions with optional LLM + Redis session history.
+
+> **Offline last-mile:** Upstream internet loss (OpenWeather, routing APIs) is handled by fallbacks in [FallbackHandling.md](FallbackHandling.md) (Haversine distances, synthetic weather). Downstream, SMS/voice closes the loop so field actors still receive pickup times. See [§15 — Farmer & driver notifications](FallbackHandling.md#15-farmer--driver-notifications--offline-last-mile-comms).
 
 > **Note:** OR-Tools solves a **capacitated VRP** with per-route distance limits. Truck availability and timing-style checks run in the **Validator** after solving—not as OR-Tools time-window dimensions.
 
@@ -86,8 +100,11 @@ For **resilience and fallback chains** (weather, routing, LLM, DB, Redis, valida
 | **Logistics** | Capacitated VRP with distance limits; Haversine (×1.3) or Google Maps distance matrix | No | OR-Tools, distance matrix cache |
 | **Validator** | Rule-based feasibility: capacity, availability, weather routes, driver hours, urgent coverage; triggers retry loop | No | Constraint checker |
 | **Farmer advisor** | Plain-language answers using the current plan and stored per-farm weather; session history | Yes | LLM, plan DB, weather snapshot (Postgres + Redis), Redis session |
+| **FPO notification gateway** | Holds SMS/voice until officer approves; dispatches pickup alerts (en/hi) and truck route SMS after sign-off | No | `POST /api/run/{id}/approve`, MSG91/Twilio/mock provider, `notification_logs` |
 
 > **Weather scope:** OpenWeather is queried at each **farm** coordinate (20 in the demo fixture). **Mandis / demand points** (10 in the demo) do not get separate weather API calls; they are affected indirectly via farm risk, routing, and demand adjustments.
+
+> **Field notifications:** Farmers need `phone`, `notify_opt_in=true`, and a route assignment. Urgent farms (&lt; 24 h spoilage) get SMS; &lt; 12 h may also get voice. Truck drivers receive SMS when `driver_phone` is set. Default provider is **mock** (logs `MOCK SMS` in backend output).
 
 LLM agents work without API keys via rule-based fallbacks. For the best demo, provide an **OpenRouter** or **OpenAI** key.
 
@@ -103,9 +120,11 @@ LLM agents work without API keys via rule-based fallbacks. For the best demo, pr
 
 ---
 
-## Demo (5 steps)
+## Demo (6 steps)
 
 > Stack must be running first — see [Quick Start](#quick-start) below.
+
+> **Notifications:** Set `NOTIFY_ENABLED=true` and `NOTIFY_PROVIDER=mock` in `.env`, then `docker compose restart backend`. After a scenario run, use **Approve & Notify** on the dashboard; check `docker logs agentfarm_backend` for `MOCK SMS` lines.
 
 ### Scenario types
 
@@ -122,8 +141,9 @@ LLM agents work without API keys via rule-based fallbacks. For the best demo, pr
 1. Open **http://localhost:3000/scenario**
 2. Pick a scenario — e.g. **Monsoon Disruption** for a scripted stress test, or **Live Weather** when `OPENWEATHER_API_KEY` is set → click **RUN SCENARIO →**
 3. Watch **6 agent roles** execute live (Weather → Demand → Inventory → Logistics → Validator → Orchestrator) — typically ~35–90 seconds for the 20-farm demo fixture
-4. Click **View Dashboard →** → check KPI cards (waste reduction vs naive baseline; typical range **20–60%** depending on scenario and seed data), map with truck routes, and the weather panel (**Live** vs simulated)
-5. Switch tabs: **FARMER** (spoilage warnings), **MANDI** (incoming supply vs demand), **TRANSPORT** (truck assignments) → open **Advisor** → ask about the plan (e.g. mandi shortages, at-risk farms, or **weather**: “Which farms have the worst rain?”, “Where is it hottest?”)
+4. Click **View Dashboard →** → check KPI cards (waste reduction vs naive baseline; typical range **20–60%** depending on scenario and seed data), map with truck routes, weather panel (**Live** vs simulated), and the **FPO Approval Gateway** panel
+5. Review routes on **FARMER**, **MANDI**, and **TRANSPORT** tabs → if the plan looks good, click **Approve & Notify** (requires `NOTIFY_ENABLED=true`) → farmers and drivers receive mock SMS in backend logs
+6. Open **Advisor** → ask about the plan (e.g. mandi shortages, at-risk farms, or **weather**: “Which farms have the worst rain?”, “Where is it hottest?”)
 
 ---
 
@@ -158,6 +178,12 @@ GOOGLE_MAPS_API_KEY=                   # https://console.cloud.google.com
 DATABASE_URL=postgresql+asyncpg://agentfarm:agentfarm@postgres:5432/agentfarm
 REDIS_URL=redis://redis:6379/0
 OPENAI_BASE_URL=https://openrouter.ai/api/v1
+
+# Farmer / driver SMS + voice (offline last-mile comms)
+NOTIFY_ENABLED=true              # false = no outbound messages
+NOTIFY_PROVIDER=mock             # mock | msg91 | twilio
+NOTIFY_REQUIRE_APPROVAL=true     # hold alerts until FPO clicks Approve & Notify
+# FIELD_OFFICER_PHONE=           # optional digest SMS when human_review is true
 ```
 
 > **No API key?** The demo still runs end-to-end. Weather uses scenario overlays when live weather is unavailable; Logistics falls through to Haversine if no routing key is set. Demand and Inventory use rule-based logic. The Advisor answers from structured plan data when the LLM is unavailable.
@@ -312,6 +338,13 @@ Frontend: **http://localhost:3000**
 | `VRP_TIME_LIMIT` | No | `30` | OR-Tools solver time limit (seconds) |
 | `MAX_RETRIES` | No | `2` | Validator retry cap before human review |
 | `ADVISOR_TEMP` | No | `0.3` | LLM temperature for the Farmer Advisor |
+| `NOTIFY_ENABLED` | No | `false` | Enable farmer/driver SMS and voice after plan completes |
+| `NOTIFY_PROVIDER` | No | `mock` | `mock` (log only), `msg91`, or `twilio` |
+| `NOTIFY_REQUIRE_APPROVAL` | No | `true` | Hold alerts until `POST /api/run/{id}/approve` |
+| `NOTIFY_SPOILAGE_HOURS` | No | `24` | SMS farms with spoilage under this many hours |
+| `NOTIFY_VOICE_SPOILAGE_HOURS` | No | `12` | Also place voice call when under this threshold |
+| `NOTIFY_ALL_ROUTED` | No | `false` | If `true`, SMS all routed farms (not only urgent) |
+| `FIELD_OFFICER_PHONE` | No | — | Optional pre-approval digest when `human_review` is set |
 
 ---
 
@@ -320,7 +353,9 @@ Frontend: **http://localhost:3000**
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/scenario/run` | Run full scenario → plan, KPIs, agent traces, `weather_summary`, `weather_snapshot` |
-| `GET` | `/api/run/{runId}` | Fetch persisted plan and summary |
+| `GET` | `/api/run/{runId}` | Fetch persisted plan, summary, and approval status |
+| `POST` | `/api/run/{runId}/approve` | FPO sign-off → dispatch farmer pickup + driver route SMS/voice |
+| `GET` | `/api/run/{runId}/notifications` | Audit log of sent/failed notification messages |
 | `GET` | `/api/run/{runId}/traces` | Per-agent traces, tools, timings, tokens |
 | `GET` | `/api/run/{runId}/weather` | Stored OpenWeather snapshot for a run (Redis, then Postgres `run_logs`) |
 | `POST` | `/api/advisor/query` | Ask the advisor about a finished plan (includes stored per-farm weather) |
@@ -342,14 +377,14 @@ Unysis_AgentFarm/
 │   │                      #   validator, orchestrator, advisor
 │   ├── memory/            # LangGraph state (T1), outcome store (T2), sessions (T3)
 │   ├── tools/             # weather_api, weather_summary, weather_store,
-│   │                      #   maps_api, vrp_solver, db
+│   │                      #   maps_api, vrp_solver, db, notifications/
 │   ├── models/            # Pydantic schemas + SQLAlchemy ORM
-│   ├── routes/            # scenario, run, advisor
+│   ├── routes/            # scenario, runs, advisor
 │   ├── graph.py           # LangGraph StateGraph
 │   └── main.py            # FastAPI entry
 ├── frontend/
 │   └── src/
-│       ├── components/    # SimulationPanel, MapView, KPIGrid, ScenarioForm, …
+│       ├── components/    # SimulationPanel, MapView, KPIGrid, FpoApprovalPanel, …
 │       ├── pages/         # scenario, dashboard, advisor, runs
 │       ├── hooks/         # useScenario, useRuns, useAdvisor
 │       └── utils/         # demoFixtures, formatters
@@ -405,8 +440,23 @@ Change host ports in `docker-compose.yml` (e.g. `"3001:3000"` for the frontend).
 Docker does not auto-reload Python like `uvicorn --reload`. After editing backend code:
 
 ```bash
-docker compose restart backend
+docker compose build backend && docker compose up -d backend
 ```
+
+Or `docker compose restart backend` if only Python files changed and the image was already rebuilt.
+
+**Approve & Notify returns `[404] Not Found`**  
+The running backend is missing the approve route (stale Docker image or port conflict with local `uvicorn`). Rebuild and restart:
+
+```bash
+docker compose build backend && docker compose up -d backend
+curl http://localhost:8000/openapi.json | grep approve
+```
+
+Then run a **fresh scenario** (old runs may lack `scenario_snapshot` and fail approve with 422). See [FallbackHandling.md §15](FallbackHandling.md#15-farmer--driver-notifications--offline-last-mile-comms).
+
+**No MOCK SMS after approve**  
+Check `NOTIFY_ENABLED=true` in `.env`, restart backend, and confirm farms have `phone` + `notify_opt_in` in the scenario payload. Alerts are held until you click **Approve & Notify** when `NOTIFY_REQUIRE_APPROVAL=true` (default).
 
 ---
 
@@ -417,6 +467,9 @@ docker compose restart backend
 cd backend
 pip install -r requirements-dev.txt
 pytest tests/test_pipeline_smoke.py -v
+
+# Notification + FPO approval gateway
+pytest tests/test_notifications -q
 
 # Frontend lint
 cd frontend

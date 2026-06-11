@@ -42,6 +42,21 @@ class Settings(BaseSettings):
     # gives some slack for cross-border districts.
     max_farm_mandi_km: float = 150.0
 
+    # Farmer notifications (SMS / voice fallback when plan is ready)
+    NOTIFY_ENABLED: bool = False
+    NOTIFY_PROVIDER: str = "mock"  # mock | msg91 | twilio
+    MSG91_AUTH_KEY: str = ""
+    MSG91_SENDER_ID: str = "KISANM"
+    MSG91_TEMPLATE_ID: str = ""
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_FROM_NUMBER: str = ""
+    NOTIFY_SPOILAGE_HOURS: float = 24.0
+    NOTIFY_VOICE_SPOILAGE_HOURS: float = 12.0
+    NOTIFY_ALL_ROUTED: bool = False
+    NOTIFY_REQUIRE_APPROVAL: bool = True
+    FIELD_OFFICER_PHONE: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

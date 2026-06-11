@@ -72,6 +72,9 @@ class RunScenarioResponse(BaseModel):
     weather_summary: dict[str, Any] = Field(default_factory=dict)
     weather_risk_summary: dict[str, str] = Field(default_factory=dict)
     weather_snapshot: dict[str, Any] = Field(default_factory=dict)
+    approval_status: str = "pending"
+    approved_at: str | None = None
+    notifications_dispatched_at: str | None = None
 
 
 def _validate_scenario_inputs(body: RunScenarioRequest) -> None:
@@ -99,6 +102,11 @@ async def run_scenario_endpoint(body: RunScenarioRequest) -> RunScenarioResponse
             scenario_type=body.scenario_type,
         )
         result: PipelineResult = await run_scenario(req)
+        from tools.db import get_plan_by_run_id
+        from tools.notifications.approval import plan_approval_payload
+
+        plan_row = await get_plan_by_run_id(result.run_id)
+        approval = plan_approval_payload(plan_row)
         return RunScenarioResponse(
             run_id=result.run_id,
             plan=result.plan,
@@ -110,6 +118,9 @@ async def run_scenario_endpoint(body: RunScenarioRequest) -> RunScenarioResponse
             weather_summary=result.weather_summary,
             weather_risk_summary=result.weather_risk_summary,
             weather_snapshot=result.weather_snapshot,
+            approval_status=approval["approval_status"],
+            approved_at=approval["approved_at"],
+            notifications_dispatched_at=approval["notifications_dispatched_at"],
         )
     except Exception as exc:
         logger.exception("POST /api/scenario/run failed")
