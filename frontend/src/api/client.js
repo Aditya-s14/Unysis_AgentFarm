@@ -47,6 +47,24 @@ export async function getRunNotifications(runId) {
   return data;
 }
 
+/** POST /api/run/:id/breakdown — report truck breakdown and partial re-plan. */
+export async function reportBreakdown(runId, body) {
+  const { data } = await client.post(`/run/${runId}/breakdown`, body);
+  return data;
+}
+
+/** POST /api/run/:id/breakdown/:incidentId/approve — approve delta notifications. */
+export async function approveBreakdown(runId, incidentId) {
+  const { data } = await client.post(`/run/${runId}/breakdown/${incidentId}/approve`);
+  return data;
+}
+
+/** GET /api/run/:id/breakdown — list breakdown incidents. */
+export async function getBreakdownIncidents(runId) {
+  const { data } = await client.get(`/run/${runId}/breakdown`);
+  return data;
+}
+
 /** GET /api/run/:id/traces — fetch per-agent reasoning traces. */
 export async function getRunTraces(runId) {
   const { data } = await client.get(`/run/${runId}/traces`);

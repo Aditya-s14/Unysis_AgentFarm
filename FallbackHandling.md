@@ -777,6 +777,36 @@ See [README.md — Manual testing: notifications](README.md#manual-testing-notif
 
 ---
 
+## 16. Vehicle breakdown assistance (live incident re-plan)
+
+When a truck breaks down **after** FPO has approved and notifications are dispatched, the officer can report the incident from the dashboard **TRANSPORT** tab. The backend runs a **partial VRP** (not a full pipeline re-run) to move pending pickups onto a spare truck.
+
+### 16.1 Flow
+
+1. `POST /api/run/{run_id}/breakdown` — requires `notifications_dispatched_at` set on the plan.
+2. Partial re-plan: pending farms on the broken route (minus `completed_farm_ids`) → spare truck.
+3. Updated `route_plan` persisted on `plans.route_plan_json`; incident stored in `run_logs` (`message=breakdown_incident`).
+4. `POST /api/run/{run_id}/breakdown/{incident_id}/approve` — delta SMS/voice to reassigned farmers, broken driver (stand down), spare driver.
+
+### 16.2 Fallbacks
+
+| Condition | Behavior |
+|-----------|----------|
+| No idle spare truck in fleet | HTTP **422** — add an unassigned truck or pass `spare_truck_id` |
+| OR-Tools partial VRP fails | Greedy nearest-neighbor assign (same as full logistics fallback) |
+| Partial plan fails validator | Incident still saved with `validation.valid=false`; FPO can review before approve |
+| `NOTIFY_ENABLED=false` | Re-plan persists; delta dispatch skipped (logged) |
+| `BREAKDOWN_ENABLED=false` | HTTP **503** on breakdown endpoints |
+
+### 16.3 Metadata
+
+- Incident `detail_json` includes `route_plan_before`, `route_plan_after`, `pending_farm_ids`, `spare_truck_id`.
+- Delta notifications prefix with **UPDATE:** to distinguish from initial pickup SMS.
+
+**Tests:** `pytest tests/test_breakdown -q`
+
+---
+
 ## Related documents
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Pipeline topology and condensed fallback overview  

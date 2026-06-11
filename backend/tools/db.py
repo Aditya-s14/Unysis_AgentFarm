@@ -595,3 +595,22 @@ async def mark_notifications_dispatched(plan_id: uuid.UUID) -> PlanTable | None:
         await session.commit()
         await session.refresh(row)
         return row
+
+
+async def update_plan_routes(
+    plan_id: uuid.UUID,
+    *,
+    route_plan_json: dict[str, Any],
+    validation_json: dict[str, Any] | None = None,
+) -> PlanTable | None:
+    """Persist an updated route plan after breakdown re-planning."""
+    async with get_session_maker()() as session:
+        row = await session.get(PlanTable, plan_id)
+        if row is None:
+            return None
+        row.route_plan_json = _jsonable(route_plan_json)
+        if validation_json is not None:
+            row.validation_json = _jsonable(validation_json)
+        await session.commit()
+        await session.refresh(row)
+        return row

@@ -113,3 +113,87 @@ def render_truck_sms(alert: TruckAlert) -> str:
         stop_count=alert.stop_count,
     )
     return body[:160]
+
+
+BREAKDOWN_FARM_REASSIGN_EN = (
+    "UPDATE: Kisan Mitra — Truck {broken_truck_id} broke down. "
+    "New pickup: Truck {truck_id} ~{pickup_time}. "
+    "{kg}kg {crop} to {mandi_name}."
+)
+
+BREAKDOWN_FARM_REASSIGN_HI = (
+    "UPDATE: Kisan Mitra — Truck {broken_truck_id} kharab. "
+    "Nayi truck {truck_id} ~{pickup_time}. "
+    "{kg}kg {crop} {mandi_name} bhejen."
+)
+
+BREAKDOWN_DRIVER_CANCEL_EN = (
+    "UPDATE: Kisan Mitra — {truck_id} route cancelled ({reason}). "
+    "Stand down; FPO will contact you."
+)
+
+BREAKDOWN_SPARE_DRIVER_EN = (
+    "UPDATE: Kisan Mitra — Urgent reassignment from {broken_truck_id}. "
+    "Truck {truck_id} start ~{start_time}. Pickups: {farm_summary}. "
+    "Deliver: {mandi_summary}."
+)
+
+BREAKDOWN_FPO_DIGEST_EN = (
+    "AgentFarm breakdown: run {run_id}. {broken_truck_id} down → "
+    "spare {spare_truck_id}. {farm_count} farms reassigned."
+)
+
+
+def render_breakdown_farm_reassign_sms(
+    alert: FarmAlert,
+    *,
+    broken_truck_id: str,
+) -> str:
+    lang = alert.language if alert.language in ("en", "hi") else "en"
+    template = BREAKDOWN_FARM_REASSIGN_HI if lang == "hi" else BREAKDOWN_FARM_REASSIGN_EN
+    body = template.format(
+        broken_truck_id=broken_truck_id,
+        truck_id=alert.truck_id,
+        pickup_time=alert.pickup_time,
+        kg=int(alert.kg),
+        crop=alert.crop_type,
+        mandi_name=alert.mandi_name[:28],
+    )
+    return body[:160]
+
+
+def render_breakdown_cancel_sms(*, truck_id: str, reason: str) -> str:
+    return BREAKDOWN_DRIVER_CANCEL_EN.format(
+        truck_id=truck_id,
+        reason=reason.replace("_", " "),
+    )[:160]
+
+
+def render_breakdown_spare_driver_sms(
+    alert: TruckAlert,
+    *,
+    broken_truck_id: str,
+) -> str:
+    body = BREAKDOWN_SPARE_DRIVER_EN.format(
+        broken_truck_id=broken_truck_id,
+        truck_id=alert.truck_id,
+        start_time=alert.start_time,
+        farm_summary=alert.farm_summary[:40],
+        mandi_summary=alert.mandi_summary[:35],
+    )
+    return body[:160]
+
+
+def render_breakdown_fpo_digest(
+    *,
+    run_id: str,
+    broken_truck_id: str,
+    spare_truck_id: str,
+    farm_count: int,
+) -> str:
+    return BREAKDOWN_FPO_DIGEST_EN.format(
+        run_id=run_id[:8],
+        broken_truck_id=broken_truck_id,
+        spare_truck_id=spare_truck_id,
+        farm_count=farm_count,
+    )[:160]

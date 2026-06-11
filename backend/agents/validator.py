@@ -253,6 +253,22 @@ def _check_urgent_coverage(state: AgentFarmState, errors: list[str]) -> int:
     return violations
 
 
+def validate_plan(state: AgentFarmState) -> ValidationResult:
+    """Run rule checks without mutating retry_count (for breakdown re-plan)."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    _check_capacity(state, errors)
+    _check_availability(state, errors, warnings)
+    _check_severe_weather(state, errors, warnings)
+    _check_drive_time(state, errors)
+    _check_urgent_coverage(state, errors)
+    return ValidationResult(
+        valid=len(errors) == 0,
+        errors=errors,
+        warnings=warnings,
+    )
+
+
 async def run(state: AgentFarmState) -> AgentFarmState:
     """Run all five rule checks; update validation_result and retry_count."""
     t0 = datetime.now(timezone.utc)

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from config import get_settings
 from routes.advisor import router as advisor_router
+from routes.breakdown import router as breakdown_router
 from routes.runs import router as runs_router
 from routes.scenario import router as scenario_router
 from tools.db import (
@@ -69,6 +70,7 @@ app.add_middleware(
 # --- Routers ---
 app.include_router(scenario_router, prefix="/api")
 app.include_router(runs_router, prefix="/api")
+app.include_router(breakdown_router, prefix="/api")
 app.include_router(advisor_router, prefix="/api")
 
 

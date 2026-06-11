@@ -143,6 +143,7 @@ LLM agents work without API keys via rule-based fallbacks. For the best demo, pr
 3. Watch **6 agent roles** execute live (Weather → Demand → Inventory → Logistics → Validator → Orchestrator) — typically ~35–90 seconds for the 20-farm demo fixture
 4. Click **View Dashboard →** → check KPI cards (waste reduction vs naive baseline; typical range **20–60%** depending on scenario and seed data), map with truck routes, weather panel (**Live** vs simulated), and the **FPO Approval Gateway** panel
 5. Review routes on **FARMER**, **MANDI**, and **TRANSPORT** tabs → if the plan looks good, click **Approve & Notify** (requires `NOTIFY_ENABLED=true`) → farmers and drivers receive mock SMS in backend logs
+5b. **Breakdown assistance (live incident):** On the **TRANSPORT** tab, after notifications are dispatched, click **Report breakdown** on an assigned truck → review the replan preview in the **Breakdown assistance** panel → **Approve replan & notify** to send UPDATE SMS to reassigned farmers and spare driver (mock logs)
 6. Open **Advisor** → ask about the plan (e.g. mandi shortages, at-risk farms, or **weather**: “Which farms have the worst rain?”, “Where is it hottest?”)
 
 ---
@@ -345,6 +346,8 @@ Frontend: **http://localhost:3000**
 | `NOTIFY_VOICE_SPOILAGE_HOURS` | No | `12` | Also place voice call when under this threshold |
 | `NOTIFY_ALL_ROUTED` | No | `false` | If `true`, SMS all routed farms (not only urgent) |
 | `FIELD_OFFICER_PHONE` | No | — | Optional pre-approval digest when `human_review` is set |
+| `BREAKDOWN_ENABLED` | No | `true` | Enable live vehicle breakdown re-planning |
+| `BREAKDOWN_AUTO_NOTIFY` | No | `false` | Skip second approval step after breakdown report |
 
 ---
 
@@ -360,6 +363,9 @@ Frontend: **http://localhost:3000**
 | `GET` | `/api/run/{runId}/weather` | Stored OpenWeather snapshot for a run (Redis, then Postgres `run_logs`) |
 | `POST` | `/api/advisor/query` | Ask the advisor about a finished plan (includes stored per-farm weather) |
 | `POST` | `/api/outcome/log` | Log outcomes (feeds cross-run learning) |
+| `POST` | `/api/run/{runId}/breakdown` | Report truck breakdown → partial re-plan preview |
+| `POST` | `/api/run/{runId}/breakdown/{incidentId}/approve` | Approve replan → delta SMS to affected farmers/drivers |
+| `GET` | `/api/run/{runId}/breakdown` | List breakdown incidents for a run |
 | `GET` | `/health` | Liveness probe |
 
 **`weather_snapshot`** (returned by scenario run and persisted per run) includes: fetch time, weather source, aggregate summary, and **per-farm readings** (temp, rain, humidity, wind, severity). Cached in Redis (`weather_run:{run_id}`, 7-day TTL) and in Postgres `run_logs.detail_json`.

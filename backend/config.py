@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     NOTIFY_REQUIRE_APPROVAL: bool = True
     FIELD_OFFICER_PHONE: str = ""
 
+    # Vehicle breakdown assistance (live incident re-planning)
+    BREAKDOWN_ENABLED: bool = True
+    BREAKDOWN_AUTO_NOTIFY: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -205,3 +205,57 @@ class AdvisorResponse(BaseModel):
     sources: list[str] = Field(default_factory=list)
     run_id: str | None = None
     session_id: str | None = None
+
+
+# --- Breakdown assistance ---
+
+
+BreakdownReason = Literal[
+    "engine_failure",
+    "flat_tire",
+    "accident",
+    "fuel_empty",
+    "other",
+]
+
+BreakdownIncidentStatus = Literal["pending_approval", "approved", "failed"]
+
+
+class BreakdownReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    truck_id: str
+    reported_by: str = "fpo"
+    reason: BreakdownReason = "engine_failure"
+    completed_farm_ids: list[str] = Field(default_factory=list)
+    spare_truck_id: str | None = None
+
+
+class BreakdownIncident(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    incident_id: str
+    run_id: str
+    truck_id: str
+    reported_by: str
+    reason: BreakdownReason
+    status: BreakdownIncidentStatus
+    completed_farm_ids: list[str] = Field(default_factory=list)
+    pending_farm_ids: list[str] = Field(default_factory=list)
+    spare_truck_id: str | None = None
+    route_plan_before: dict[str, object] = Field(default_factory=dict)
+    route_plan_after: dict[str, object] = Field(default_factory=dict)
+    validation: ValidationResult | None = None
+    created_at: str | None = None
+    approved_at: str | None = None
+    notifications: dict[str, int] | None = None
+
+
+class ReplanPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    incident: BreakdownIncident
+    affected_farms: list[str] = Field(default_factory=list)
+    spare_truck_id: str | None = None
+    validation_valid: bool = True
+    validation_errors: list[str] = Field(default_factory=list)
