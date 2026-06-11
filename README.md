@@ -144,6 +144,7 @@ LLM agents work without API keys via rule-based fallbacks. For the best demo, pr
 4. Click **View Dashboard →** → check KPI cards (waste reduction vs naive baseline; typical range **20–60%** depending on scenario and seed data), map with truck routes, weather panel (**Live** vs simulated), and the **FPO Approval Gateway** panel
 5. Review routes on **FARMER**, **MANDI**, and **TRANSPORT** tabs → if the plan looks good, click **Approve & Notify** (requires `NOTIFY_ENABLED=true`) → farmers and drivers receive mock SMS in backend logs
 5b. **Breakdown assistance (live incident):** On the **TRANSPORT** tab, after notifications are dispatched, click **Report breakdown** on an assigned truck → review the replan preview in the **Breakdown assistance** panel → **Approve replan & notify** to send UPDATE SMS to reassigned farmers and spare driver (mock logs)
+5c. **Live GPS tracking:** After **Approve & Notify**, open **Open driver GPS page** on a truck card (or `/driver/{runId}/{truckId}` on a phone) → allow location → dashboard map shows live truck markers; if the driver strays >3 km off the planned corridor for 2+ minutes, FPO and driver receive deviation SMS (mock logs)
 6. Open **Advisor** → ask about the plan (e.g. mandi shortages, at-risk farms, or **weather**: “Which farms have the worst rain?”, “Where is it hottest?”)
 
 ---
@@ -348,6 +349,12 @@ Frontend: **http://localhost:3000**
 | `FIELD_OFFICER_PHONE` | No | — | Optional pre-approval digest when `human_review` is set |
 | `BREAKDOWN_ENABLED` | No | `true` | Enable live vehicle breakdown re-planning |
 | `BREAKDOWN_AUTO_NOTIFY` | No | `false` | Skip second approval step after breakdown report |
+| `TRACKING_ENABLED` | No | `true` | Enable live truck GPS ingest and deviation alerts |
+| `TRACKING_INGEST_KEY` | No | `""` | Optional `X-Tracking-Key` header for position ingest |
+| `DEVIATION_THRESHOLD_KM` | No | `3.0` | Off-route corridor width before deviation |
+| `DEVIATION_DEBOUNCE_SECONDS` | No | `120` | Sustained off-route time before SMS alert |
+| `DEVIATION_ALERT_COOLDOWN_MIN` | No | `15` | Minimum gap between repeat deviation alerts |
+| `TRACKING_STALE_MINUTES` | No | `10` | No GPS update → stale on dashboard |
 
 ---
 
@@ -366,6 +373,9 @@ Frontend: **http://localhost:3000**
 | `POST` | `/api/run/{runId}/breakdown` | Report truck breakdown → partial re-plan preview |
 | `POST` | `/api/run/{runId}/breakdown/{incidentId}/approve` | Approve replan → delta SMS to affected farmers/drivers |
 | `GET` | `/api/run/{runId}/breakdown` | List breakdown incidents for a run |
+| `POST` | `/api/run/{runId}/tracking/{truckId}/position` | Ingest driver GPS position |
+| `GET` | `/api/run/{runId}/tracking` | Live truck positions for dashboard poll |
+| `GET` | `/api/run/{runId}/tracking/deviations` | Route deviation alert history |
 | `GET` | `/health` | Liveness probe |
 
 **`weather_snapshot`** (returned by scenario run and persisted per run) includes: fetch time, weather source, aggregate summary, and **per-farm readings** (temp, rain, humidity, wind, severity). Cached in Redis (`weather_run:{run_id}`, 7-day TTL) and in Postgres `run_logs.detail_json`.

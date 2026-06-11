@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { useState } from 'react';
 import WhyThisRoute from '@/components/Transport/WhyThisRoute';
 import { buildRouteLabel, displayTruckId, truncateRoute } from '@/utils/truckDisplay';
@@ -75,6 +76,9 @@ export default function TruckCard({
   computeETA,
   canReportBreakdown,
   onReportBreakdown,
+  runId,
+  livePosition,
+  trackingEnabled,
 }) {
   const label = displayTruckId(truck.id);
   const distancePending = !route || distanceKm <= 0;
@@ -82,11 +86,13 @@ export default function TruckCard({
   const etaTime = distancePending ? null : computeETA(distanceKm);
 
   const statusLabel = status === 'broken_down' ? 'BROKEN DOWN'
-    : status === 'assigned' ? 'ASSIGNED'
-      : status === 'delayed' ? 'DELAYED' : 'IDLE';
+    : status === 'deviating' ? 'DEVIATING'
+      : status === 'assigned' ? 'ASSIGNED'
+        : status === 'delayed' ? 'DELAYED' : 'IDLE';
   const statusColor = status === 'broken_down' ? 'var(--danger)'
-    : status === 'assigned' ? 'var(--green-ok)'
-      : status === 'delayed' ? 'var(--red-risk)' : 'var(--muted)';
+    : status === 'deviating' ? 'var(--danger)'
+      : status === 'assigned' ? 'var(--green-ok)'
+        : status === 'delayed' ? 'var(--red-risk)' : 'var(--muted)';
 
   return (
     <article
@@ -201,6 +207,30 @@ export default function TruckCard({
               mandiById={mandiById}
               farmsById={farmsById}
             />
+
+            {livePosition && (
+              <p className="text-muted m-0 mt-2" style={{ fontSize: '10px' }}>
+                GPS: {(livePosition.status || 'unknown').replace('_', ' ').toUpperCase()}
+                {' · '}
+                {livePosition.deviation_km?.toFixed?.(1) ?? livePosition.deviation_km} km off route
+              </p>
+            )}
+
+            {trackingEnabled && runId && route && (
+              <Link
+                href={`/driver/${runId}/${truck.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="mt-2 font-mono uppercase tracking-wider text-[10px] px-3 py-2 w-full inline-block text-center"
+                style={{
+                  border: '1px solid var(--accent)',
+                  color: 'var(--accent)',
+                  borderRadius: '2px',
+                  textDecoration: 'none',
+                }}
+              >
+                Open driver GPS page
+              </Link>
+            )}
 
             {canReportBreakdown && onReportBreakdown && (
               <button

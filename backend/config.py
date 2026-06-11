@@ -61,6 +61,15 @@ class Settings(BaseSettings):
     BREAKDOWN_ENABLED: bool = True
     BREAKDOWN_AUTO_NOTIFY: bool = False
 
+    # Live truck GPS tracking and route deviation alerts
+    TRACKING_ENABLED: bool = True
+    TRACKING_INGEST_KEY: str = ""
+    DEVIATION_THRESHOLD_KM: float = 3.0
+    DEVIATION_DEBOUNCE_SECONDS: int = 120
+    DEVIATION_ALERT_COOLDOWN_MIN: int = 15
+    TRACKING_POSITION_TTL_HOURS: int = 24
+    TRACKING_STALE_MINUTES: int = 10
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -259,3 +259,57 @@ class ReplanPreview(BaseModel):
     spare_truck_id: str | None = None
     validation_valid: bool = True
     validation_errors: list[str] = Field(default_factory=list)
+
+
+# --- Live truck GPS tracking ---
+
+
+TruckTrackingStatus = Literal["on_route", "deviating", "stale", "unknown"]
+DeviationAlertStatus = Literal["open", "resolved"]
+
+
+class PositionReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    reported_at: datetime | None = None
+    accuracy_m: float | None = Field(default=None, ge=0)
+    reported_by: str = "driver"
+
+
+class TruckPosition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    truck_id: str
+    lat: float
+    lng: float
+    reported_at: str
+    on_route: bool
+    deviation_km: float = Field(ge=0)
+    status: TruckTrackingStatus
+
+
+class RouteDeviationAlert(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    alert_id: str
+    run_id: str
+    truck_id: str
+    deviation_km: float
+    threshold_km: float
+    lat: float
+    lng: float
+    status: DeviationAlertStatus
+    notified_at: str | None = None
+    notifications: dict[str, int] | None = None
+    created_at: str | None = None
+
+
+class PositionIngestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    position: TruckPosition
+    alert_triggered: bool = False
+    alert: RouteDeviationAlert | None = None

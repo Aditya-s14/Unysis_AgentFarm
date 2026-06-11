@@ -807,6 +807,40 @@ When a truck breaks down **after** FPO has approved and notifications are dispat
 
 ---
 
+## 17. Live truck GPS tracking and route deviation alerts
+
+After FPO **Approve & Notify**, drivers can post GPS via `POST /api/run/{run_id}/tracking/{truck_id}/position`. The dashboard polls `GET /api/run/{run_id}/tracking` every ~15s for live map markers.
+
+### 17.1 Deviation detection
+
+1. Compute distance from reported `(lat, lng)` to the truck's planned route polyline (haversine to interpolated segments).
+2. **Off-route** when distance > `DEVIATION_THRESHOLD_KM` (default 3 km).
+3. Alert only after sustained off-route for `DEVIATION_DEBOUNCE_SECONDS` (default 120s).
+4. Repeat alerts suppressed for `DEVIATION_ALERT_COOLDOWN_MIN` (default 15 min) unless the truck returns on-route first.
+5. Broken-down trucks (active breakdown incident) reject GPS ingest with HTTP **409**.
+
+### 17.2 Notifications
+
+On confirmed deviation (when `NOTIFY_ENABLED=true`):
+
+- **Driver SMS** — return to planned route
+- **FPO SMS** (`FIELD_OFFICER_PHONE`) — digest with truck id and deviation km
+
+Alerts persisted in `run_logs` (`message=route_deviation_alert`) and `notification_logs`.
+
+### 17.3 Fallbacks
+
+| Condition | Behavior |
+|-----------|----------|
+| Redis unavailable | In-memory position cache per process; debounce may not survive restarts |
+| No road snapping | Straight segment corridor only (offline-resilient) |
+| `TRACKING_ENABLED=false` | HTTP **503** on tracking endpoints |
+| Stale GPS (> `TRACKING_STALE_MINUTES`) | Dashboard shows `stale` status; no auto-alert |
+
+**Tests:** `pytest tests/test_tracking -q`
+
+---
+
 ## Related documents
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Pipeline topology and condensed fallback overview  

@@ -197,3 +197,37 @@ def render_breakdown_fpo_digest(
         spare_truck_id=spare_truck_id,
         farm_count=farm_count,
     )[:160]
+
+
+DEVIATION_DRIVER_EN = (
+    "ALERT: Kisan Mitra — {truck_id} is {deviation_km:.1f} km off route. "
+    "Return to planned pickups immediately."
+)
+
+DEVIATION_DRIVER_HI = (
+    "ALERT: Kisan Mitra — {truck_id} route se {deviation_km:.1f} km door. "
+    "Kripya planned pickup par wapas jayein."
+)
+
+DEVIATION_FPO_DIGEST_EN = (
+    "AgentFarm route deviation: run {run_id}. Truck {truck_id} "
+    "{deviation_km:.1f} km off planned corridor. Check dashboard."
+)
+
+
+def render_deviation_driver_sms(*, truck_id: str, deviation_km: float, lang: str = "en") -> str:
+    template = DEVIATION_DRIVER_HI if lang == "hi" else DEVIATION_DRIVER_EN
+    return template.format(truck_id=truck_id, deviation_km=deviation_km)[:160]
+
+
+def render_deviation_fpo_digest(
+    *,
+    run_id: str,
+    truck_id: str,
+    deviation_km: float,
+) -> str:
+    return DEVIATION_FPO_DIGEST_EN.format(
+        run_id=run_id[:8],
+        truck_id=truck_id,
+        deviation_km=deviation_km,
+    )[:160]

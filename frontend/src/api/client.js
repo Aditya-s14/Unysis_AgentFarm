@@ -65,6 +65,26 @@ export async function getBreakdownIncidents(runId) {
   return data;
 }
 
+/** POST /api/run/:id/tracking/:truckId/position — ingest driver GPS. */
+export async function postTruckPosition(runId, truckId, body, headers = {}) {
+  const { data } = await client.post(`/run/${runId}/tracking/${truckId}/position`, body, {
+    headers,
+  });
+  return data;
+}
+
+/** GET /api/run/:id/tracking — live truck positions. */
+export async function getTruckTracking(runId) {
+  const { data } = await client.get(`/run/${runId}/tracking`);
+  return data;
+}
+
+/** GET /api/run/:id/tracking/deviations — deviation alert history. */
+export async function getDeviationAlerts(runId) {
+  const { data } = await client.get(`/run/${runId}/tracking/deviations`);
+  return data;
+}
+
 /** GET /api/run/:id/traces — fetch per-agent reasoning traces. */
 export async function getRunTraces(runId) {
   const { data } = await client.get(`/run/${runId}/traces`);

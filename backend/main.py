@@ -15,6 +15,7 @@ from config import get_settings
 from routes.advisor import router as advisor_router
 from routes.breakdown import router as breakdown_router
 from routes.runs import router as runs_router
+from routes.tracking import router as tracking_router
 from routes.scenario import router as scenario_router
 from tools.db import (
     backfill_outcome_dims_from_csv,
@@ -71,6 +72,7 @@ app.add_middleware(
 app.include_router(scenario_router, prefix="/api")
 app.include_router(runs_router, prefix="/api")
 app.include_router(breakdown_router, prefix="/api")
+app.include_router(tracking_router, prefix="/api")
 app.include_router(advisor_router, prefix="/api")
 
 

@@ -14,7 +14,9 @@ import MapView from '@/components/Map/MapView';
 import TruckCard from '@/components/Transport/TruckCard';
 import BreakdownIncidentPanel from '@/components/Transport/BreakdownIncidentPanel';
 import BreakdownReportModal from '@/components/Transport/BreakdownReportModal';
+import DeviationAlertPanel from '@/components/Transport/DeviationAlertPanel';
 import { getBreakdownIncidents, getRun } from '@/api/client';
+import useTruckTracking from '@/hooks/useTruckTracking';
 import { displayTruckId } from '@/utils/truckDisplay';
 import { EM_DASH, MIDDOT, SECTION, WARN } from '@/utils/uiChars';
 import useRuns, { useCachedRunResponse } from '@/hooks/useRuns';
@@ -153,6 +155,12 @@ export default function DashboardPage() {
   const notificationsDispatched = Boolean(
     cached?.notifications_dispatched_at || cached?.approval_status === 'dispatched',
   );
+
+  const {
+    positions: truckPositions,
+    positionByTruck,
+    alerts: deviationAlerts,
+  } = useTruckTracking(runId, notificationsDispatched);
 
   const refreshRunCache = useCallback(async () => {
     if (!runId || !cached) return;
@@ -354,8 +362,11 @@ export default function DashboardPage() {
       : 0;
     const loadPct = route ? Math.min(100, (totalLoad / truck.capacity_kg) * 100) : 0;
     let status = 'idle';
+    const live = positionByTruck[truck.id];
     if (brokenTruckIds.has(truck.id)) {
       status = 'broken_down';
+    } else if (live?.status === 'deviating') {
+      status = 'deviating';
     } else if (route) {
       status = isTruckDelayed(distanceKm, route) ? 'delayed' : 'assigned';
     }
@@ -371,7 +382,7 @@ export default function DashboardPage() {
       status,
       mandiIds,
     };
-  }), [rawRoutes, atRiskMap, brokenTruckIds]);
+  }), [rawRoutes, atRiskMap, brokenTruckIds, positionByTruck]);
 
   const filteredTransportRows = useMemo(() => transportRows.filter((row) => {
     if (transportFilters.status !== 'all' && row.status !== transportFilters.status) return false;
@@ -423,6 +434,10 @@ export default function DashboardPage() {
               }
             }}
           />
+        )}
+
+        {runId && notificationsDispatched && (
+          <DeviationAlertPanel alerts={deviationAlerts} />
         )}
 
         {runId && notificationsDispatched && (
@@ -515,6 +530,7 @@ export default function DashboardPage() {
                         farms={DEMO_MAP_FARMS}
                         demandPoints={DEMO_MAP_MANDIS}
                         routes={routesForMap}
+                        truckPositions={truckPositions}
                         selectedTruckId={selectedTruckId}
                       />
                     </div>
@@ -776,6 +792,7 @@ export default function DashboardPage() {
                       { value: 'assigned', label: 'Assigned' },
                       { value: 'idle', label: 'Idle' },
                       { value: 'delayed', label: 'Delayed' },
+                      { value: 'deviating', label: 'Deviating' },
                       { value: 'broken_down', label: 'Broken down' },
                     ]}
                   />
@@ -857,6 +874,9 @@ export default function DashboardPage() {
                         onReportBreakdown={(truckId, stops) => {
                           setBreakdownModal({ truckId, farmStops: stops });
                         }}
+                        runId={runId}
+                        livePosition={positionByTruck[truck.id]}
+                        trackingEnabled={notificationsDispatched}
                       />
                     );
                   })}
@@ -886,6 +906,7 @@ export default function DashboardPage() {
                       farms={DEMO_MAP_FARMS}
                       demandPoints={DEMO_MAP_MANDIS}
                       routes={routesForMap}
+                      truckPositions={truckPositions}
                       selectedTruckId={selectedTruckId}
                     />
                   </div>
