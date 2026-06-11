@@ -485,6 +485,64 @@ bash scripts/validate_demo.sh          # macOS / Linux
 
 Verifies services, `/health`, seed counts, and a minimal `POST /api/scenario/run`.
 
+### Manual testing: notifications (PowerShell)
+
+Replace `{run_id}` with the run UUID from the dashboard URL or scenario response (e.g. `220c1e01-d45a-4d1a-ab47-14f48e41400e`).
+
+> **Note:** `GET http://...` is not valid in PowerShell. Use `Invoke-RestMethod` or `curl.exe` below.
+
+**1 — Check approval status**
+
+```powershell
+$runId = "220c1e01-d45a-4d1a-ab47-14f48e41400e"
+Invoke-RestMethod -Uri "http://localhost:8000/api/run/$runId" | ConvertTo-Json -Depth 5
+```
+
+Look for `approval_status` (`pending` → `dispatched`) and `notifications_dispatched_at`.
+
+**2 — Approve and dispatch (if still pending)**
+
+From the dashboard **Approve & Notify** button, or via API:
+
+```powershell
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/api/run/$runId/approve" `
+  -ContentType "application/json" `
+  -Body "{}" | ConvertTo-Json -Depth 5
+```
+
+**3 — Fetch notification audit log (who got what)**
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/api/run/$runId/notifications" | ConvertTo-Json -Depth 10
+```
+
+Each row includes `phone`, `channel` (`sms` / `voice`), `status`, and `message_body`. Empty `notifications: []` means nothing was sent yet (not approved, or `NOTIFY_ENABLED=false`).
+
+**Alternative (curl on Windows):**
+
+```powershell
+curl.exe -s "http://localhost:8000/api/run/$runId/notifications"
+```
+
+**Or in a browser:** `http://localhost:8000/api/run/{run_id}/notifications`  
+**Or Swagger UI:** http://localhost:8000/docs → `GET /api/run/{run_id}/notifications` → Execute.
+
+**4 — Live mock send log (console)**
+
+| Backend | Where to look |
+|---------|----------------|
+| **Docker** | `docker logs agentfarm_backend -f` — search for `MOCK SMS` / `MOCK VOICE` |
+| **Local uvicorn** | Terminal running `uvicorn main:app --reload` |
+
+Example log line:
+
+```
+INFO: ... MOCK SMS → +919900000001: Kisan Mitra: Nandi Valley - Truck tr-001 pickup ~6:30 AM...
+```
+
+Use **one** backend on port 8000 (Docker **or** local uvicorn, not both) so approve, API, and logs all hit the same process.
+
 ---
 
 ## Contributing

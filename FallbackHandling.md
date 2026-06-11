@@ -757,6 +757,24 @@ pytest tests/test_notifications -q
 2. Run a scenario from the dashboard (creates `scenario_snapshot`).
 3. Click **Approve & Notify** → expect `MOCK SMS` lines in backend logs and rows in `GET /api/run/{id}/notifications`.
 
+**PowerShell (Windows) — check status, approve, audit log**
+
+```powershell
+$runId = "your-run-id-here"
+
+# Approval status
+Invoke-RestMethod -Uri "http://localhost:8000/api/run/$runId" | ConvertTo-Json -Depth 5
+
+# Approve (if pending)
+Invoke-RestMethod -Method POST -Uri "http://localhost:8000/api/run/$runId/approve" `
+  -ContentType "application/json" -Body "{}" | ConvertTo-Json -Depth 5
+
+# Full notification audit (phone, channel, message_body)
+Invoke-RestMethod -Uri "http://localhost:8000/api/run/$runId/notifications" | ConvertTo-Json -Depth 10
+```
+
+See [README.md — Manual testing: notifications](README.md#manual-testing-notifications-powershell) for curl/browser alternatives and where to find `MOCK SMS` console lines.
+
 ---
 
 ## Related documents
