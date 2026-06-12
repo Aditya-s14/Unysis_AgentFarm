@@ -57,10 +57,16 @@ export default function LoginPage() {
     try {
       const resp = await verifyOtp(phone, code);
       login(resp.access_token, resp.expires_in);
-      router.push(ROLE_HOME[resp.role] || '/dashboard');
+      // Hard navigation, not router.push: a tab opened before a frontend
+      // rebuild holds a stale bundle whose client-side route transition can
+      // fail silently — leaving a signed-in user stranded on this form,
+      // where re-pressing Verify burns the (single-use) code into 401s.
+      // A full page load always goes through middleware with the fresh
+      // cookie and always loads the current bundle. Button stays disabled
+      // (busy) on success for the same reason.
+      window.location.assign(ROLE_HOME[resp.role] || '/dashboard');
     } catch (err) {
       setError(err?.response?.data?.detail || err.message);
-    } finally {
       setBusy(false);
     }
   };
