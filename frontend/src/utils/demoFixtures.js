@@ -11,29 +11,29 @@
 // ── 20 Farms ──────────────────────────────────────────────────────────────
 export const DEMO_FARMS = [
   // Karnataka — Tomatoes
-  { id: 'farm-001', name: 'Nandi Valley Tomatoes',          lat: 13.0827, lng: 77.5439, crop_type: 'tomato', acreage:  8.4, typical_yield_kg: 1200, harvest_window_start: '2026-03-15', harvest_window_end: '2026-05-30' },
-  { id: 'farm-002', name: 'Tumkur Organic Tomato Coop',     lat: 13.3409, lng: 77.1011, crop_type: 'tomato', acreage: 11.2, typical_yield_kg: 1800, harvest_window_start: '2026-03-10', harvest_window_end: '2026-06-01' },
-  { id: 'farm-003', name: 'Raichur Table Tomato Estate',    lat: 16.2076, lng: 77.3463, crop_type: 'tomato', acreage:  6.8, typical_yield_kg:  950, harvest_window_start: '2026-03-20', harvest_window_end: '2026-05-25' },
-  { id: 'farm-004', name: 'Chikkaballapur Cherry Tomatoes', lat: 13.4322, lng: 77.7275, crop_type: 'tomato', acreage:  9.1, typical_yield_kg: 1500, harvest_window_start: '2026-03-12', harvest_window_end: '2026-05-28' },
-  { id: 'farm-005', name: 'Bellary Tomato Farmers Union',   lat: 15.1394, lng: 76.9214, crop_type: 'tomato', acreage: 14.0, typical_yield_kg: 2000, harvest_window_start: '2026-03-18', harvest_window_end: '2026-06-05' },
+  { id: 'farm-001', name: 'Nandi Valley Tomatoes',          lat: 13.0827, lng: 77.5439, crop_type: 'tomato', acreage:  8.4, typical_yield_kg: 1200, harvest_window_start: '2026-06-08', harvest_window_end: '2026-08-15' },
+  { id: 'farm-002', name: 'Tumkur Organic Tomato Coop',     lat: 13.3409, lng: 77.1011, crop_type: 'tomato', acreage: 11.2, typical_yield_kg: 1800, harvest_window_start: '2026-06-10', harvest_window_end: '2026-08-20' },
+  { id: 'farm-003', name: 'Raichur Table Tomato Estate',    lat: 16.2076, lng: 77.3463, crop_type: 'tomato', acreage:  6.8, typical_yield_kg:  950, harvest_window_start: '2026-06-06', harvest_window_end: '2026-08-10' },
+  { id: 'farm-004', name: 'Chikkaballapur Cherry Tomatoes', lat: 13.4322, lng: 77.7275, crop_type: 'tomato', acreage:  9.1, typical_yield_kg: 1500, harvest_window_start: '2026-06-11', harvest_window_end: '2026-08-25' },
+  { id: 'farm-005', name: 'Bellary Tomato Farmers Union',   lat: 15.1394, lng: 76.9214, crop_type: 'tomato', acreage: 14.0, typical_yield_kg: 2000, harvest_window_start: '2026-06-09', harvest_window_end: '2026-08-18' },
   // Maharashtra — Onions
-  { id: 'farm-006', name: 'Nasik Hills Onion Growers',      lat: 19.9975, lng: 73.7898, crop_type: 'onion',  acreage: 10.5, typical_yield_kg:  900, harvest_window_start: '2026-01-10', harvest_window_end: '2026-03-20' },
-  { id: 'farm-007', name: 'Solapur Red Onion Collective',   lat: 17.6599, lng: 75.9064, crop_type: 'onion',  acreage: 18.3, typical_yield_kg: 1500, harvest_window_start: '2026-01-05', harvest_window_end: '2026-03-15' },
-  { id: 'farm-008', name: 'Sangli Onion Cooperatives',      lat: 16.8524, lng: 74.5815, crop_type: 'onion',  acreage: 12.7, typical_yield_kg: 1200, harvest_window_start: '2026-01-12', harvest_window_end: '2026-03-25' },
-  { id: 'farm-009', name: 'Dhule Onion Plains',             lat: 20.9042, lng: 74.7778, crop_type: 'onion',  acreage:  9.4, typical_yield_kg:  800, harvest_window_start: '2026-01-08', harvest_window_end: '2026-03-18' },
-  { id: 'farm-010', name: 'Pune Plateau Onions',            lat: 18.5204, lng: 73.8567, crop_type: 'onion',  acreage:  7.2, typical_yield_kg:  600, harvest_window_start: '2026-01-15', harvest_window_end: '2026-03-22' },
+  { id: 'farm-006', name: 'Nasik Hills Onion Growers',      lat: 19.9975, lng: 73.7898, crop_type: 'onion',  acreage: 10.5, typical_yield_kg:  900, harvest_window_start: '2026-05-28', harvest_window_end: '2026-08-30' },
+  { id: 'farm-007', name: 'Solapur Red Onion Collective',   lat: 17.6599, lng: 75.9064, crop_type: 'onion',  acreage: 18.3, typical_yield_kg: 1500, harvest_window_start: '2026-06-01', harvest_window_end: '2026-09-05' },
+  { id: 'farm-008', name: 'Sangli Onion Cooperatives',      lat: 16.8524, lng: 74.5815, crop_type: 'onion',  acreage: 12.7, typical_yield_kg: 1200, harvest_window_start: '2026-06-05', harvest_window_end: '2026-09-10' },
+  { id: 'farm-009', name: 'Dhule Onion Plains',             lat: 20.9042, lng: 74.7778, crop_type: 'onion',  acreage:  9.4, typical_yield_kg:  800, harvest_window_start: '2026-05-25', harvest_window_end: '2026-08-25' },
+  { id: 'farm-010', name: 'Pune Plateau Onions',            lat: 18.5204, lng: 73.8567, crop_type: 'onion',  acreage:  7.2, typical_yield_kg:  600, harvest_window_start: '2026-06-08', harvest_window_end: '2026-09-12' },
   // Karnataka — Bananas
-  { id: 'farm-011', name: 'Chikmagalur Robusta Banana',     lat: 13.3161, lng: 75.7720, crop_type: 'banana', acreage: 15.6, typical_yield_kg:  700, harvest_window_start: '2026-05-01', harvest_window_end: '2026-08-30' },
-  { id: 'farm-012', name: 'Coastal Karwar Cavendish',       lat: 14.8136, lng: 74.1286, crop_type: 'banana', acreage: 22.1, typical_yield_kg: 1200, harvest_window_start: '2026-04-20', harvest_window_end: '2026-09-10' },
-  { id: 'farm-013', name: 'Mysore Nendran Banana Trust',    lat: 12.2958, lng: 76.6394, crop_type: 'banana', acreage: 11.0, typical_yield_kg:  500, harvest_window_start: '2026-05-05', harvest_window_end: '2026-08-15' },
-  { id: 'farm-014', name: 'Shivamogga Hill Plantains',      lat: 13.9299, lng: 75.5681, crop_type: 'banana', acreage: 13.8, typical_yield_kg:  850, harvest_window_start: '2026-05-12', harvest_window_end: '2026-09-05' },
-  { id: 'farm-015', name: 'Haveri Grand Naine',             lat: 14.8006, lng: 75.3910, crop_type: 'banana', acreage: 19.4, typical_yield_kg: 1000, harvest_window_start: '2026-04-28', harvest_window_end: '2026-08-28' },
+  { id: 'farm-011', name: 'Chikmagalur Robusta Banana',     lat: 13.3161, lng: 75.7720, crop_type: 'banana', acreage: 15.6, typical_yield_kg:  700, harvest_window_start: '2026-06-07', harvest_window_end: '2026-09-01' },
+  { id: 'farm-012', name: 'Coastal Karwar Cavendish',       lat: 14.8136, lng: 74.1286, crop_type: 'banana', acreage: 22.1, typical_yield_kg: 1200, harvest_window_start: '2026-06-10', harvest_window_end: '2026-09-10' },
+  { id: 'farm-013', name: 'Mysore Nendran Banana Trust',    lat: 12.2958, lng: 76.6394, crop_type: 'banana', acreage: 11.0, typical_yield_kg:  500, harvest_window_start: '2026-06-05', harvest_window_end: '2026-08-28' },
+  { id: 'farm-014', name: 'Shivamogga Hill Plantains',      lat: 13.9299, lng: 75.5681, crop_type: 'banana', acreage: 13.8, typical_yield_kg:  850, harvest_window_start: '2026-06-09', harvest_window_end: '2026-09-05' },
+  { id: 'farm-015', name: 'Haveri Grand Naine',             lat: 14.8006, lng: 75.3910, crop_type: 'banana', acreage: 19.4, typical_yield_kg: 1000, harvest_window_start: '2026-06-11', harvest_window_end: '2026-09-08' },
   // Maharashtra — Mangoes
-  { id: 'farm-016', name: 'Ratnagiri Alphonso Grove',       lat: 16.9902, lng: 73.3120, crop_type: 'mango',  acreage: 25.0, typical_yield_kg:  750, harvest_window_start: '2026-04-01', harvest_window_end: '2026-06-30' },
-  { id: 'farm-017', name: 'Devgad Mango Estates',           lat: 16.3869, lng: 73.3984, crop_type: 'mango',  acreage: 30.5, typical_yield_kg:  900, harvest_window_start: '2026-04-10', harvest_window_end: '2026-07-15' },
-  { id: 'farm-018', name: 'Belgaum Kesar Block',            lat: 15.8497, lng: 74.4977, crop_type: 'mango',  acreage: 18.2, typical_yield_kg:  500, harvest_window_start: '2026-03-25', harvest_window_end: '2026-06-20' },
-  { id: 'farm-019', name: 'Dharwad Banganapalli Farms',     lat: 15.4589, lng: 75.0078, crop_type: 'mango',  acreage: 12.3, typical_yield_kg:  400, harvest_window_start: '2026-04-05', harvest_window_end: '2026-06-25' },
-  { id: 'farm-020', name: 'Bijapur Mango Collective',       lat: 16.8244, lng: 75.7154, crop_type: 'mango',  acreage: 21.7, typical_yield_kg:  650, harvest_window_start: '2026-03-30', harvest_window_end: '2026-07-10' },
+  { id: 'farm-016', name: 'Ratnagiri Alphonso Grove',       lat: 16.9902, lng: 73.3120, crop_type: 'mango',  acreage: 25.0, typical_yield_kg:  750, harvest_window_start: '2026-06-06', harvest_window_end: '2026-08-20' },
+  { id: 'farm-017', name: 'Devgad Mango Estates',           lat: 16.3869, lng: 73.3984, crop_type: 'mango',  acreage: 30.5, typical_yield_kg:  900, harvest_window_start: '2026-06-10', harvest_window_end: '2026-08-30' },
+  { id: 'farm-018', name: 'Belgaum Kesar Block',            lat: 15.8497, lng: 74.4977, crop_type: 'mango',  acreage: 18.2, typical_yield_kg:  500, harvest_window_start: '2026-06-08', harvest_window_end: '2026-08-15' },
+  { id: 'farm-019', name: 'Dharwad Banganapalli Farms',     lat: 15.4589, lng: 75.0078, crop_type: 'mango',  acreage: 12.3, typical_yield_kg:  400, harvest_window_start: '2026-06-11', harvest_window_end: '2026-08-22' },
+  { id: 'farm-020', name: 'Bijapur Mango Collective',       lat: 16.8244, lng: 75.7154, crop_type: 'mango',  acreage: 21.7, typical_yield_kg:  650, harvest_window_start: '2026-06-07', harvest_window_end: '2026-08-25' },
 ];
 
 // ── 10 Demand Points ──────────────────────────────────────────────────────
@@ -45,6 +45,11 @@ export const DEMO_DEMAND_POINTS = [
   { id: 'dp-apmc-04', name: 'Nashik Wholesale APMC',         lat: 19.9975, lng: 73.7898, point_type: 'apmc',    base_demand_per_day: 1900 },
   { id: 'dp-apmc-05', name: 'Solapur Tomato Auction APMC',   lat: 17.6599, lng: 75.9064, point_type: 'apmc',    base_demand_per_day: 1500 },
   { id: 'dp-apmc-06', name: 'Sangli Turmeric & Veg APMC',   lat: 16.8524, lng: 74.5815, point_type: 'apmc',    base_demand_per_day: 1300 },
+  // Cover north-east Karnataka (Raichur/Bellary) and the Malnad belt
+  // (Chikmagalur/Shivamogga) — without these, four demo farms sit >150 km
+  // from every mandi and can never be routed (APMC radius constraint).
+  { id: 'dp-apmc-07', name: 'Raichur APMC Yard',             lat: 16.2120, lng: 77.3439, point_type: 'apmc',    base_demand_per_day: 1200 },
+  { id: 'dp-apmc-08', name: 'Davanagere APMC Market',        lat: 14.4644, lng: 75.9218, point_type: 'apmc',    base_demand_per_day: 1500 },
   // Private Distribution Centres
   { id: 'dp-priv-01', name: 'Reliance Fresh DC Pune',        lat: 18.5018, lng: 73.8745, point_type: 'private', base_demand_per_day: 1200 },
   { id: 'dp-priv-02', name: 'Metro Cash Nashik Ring Road',   lat: 19.9403, lng: 73.8341, point_type: 'private', base_demand_per_day: 1000 },

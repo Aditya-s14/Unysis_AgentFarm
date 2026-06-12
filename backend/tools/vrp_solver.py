@@ -65,6 +65,34 @@ def _node_coord_index(
 
 
 _MAX_ROUTE_KM = 14.0 * 50.0  # legal drive limit × conservative speed (km)
+# Drop penalties (km-equivalent per unserved stop). Urgent stock costs far
+# more to abandon, so when capacity forces drops the solver sacrifices
+# comfortable farms first. Mandis are delivery anchors — never worth dropping.
+_DROP_PENALTY_URGENT_KM = 10_000.0   # <12 h to spoilage
+_DROP_PENALTY_SOON_KM = 6_000.0      # <48 h
+_DROP_PENALTY_AT_RISK_KM = 3_000.0   # flagged at-risk, >=48 h
+_DROP_PENALTY_SAFE_KM = 1_000.0      # not at risk
+_DROP_PENALTY_MANDI_KM = 10_000.0
+
+
+def _drop_penalty_km(
+    node: int,
+    farms: list[Farm],
+    at_risk_by_farm: dict[str, AtRiskStock],
+) -> float:
+    if node > len(farms):
+        return _DROP_PENALTY_MANDI_KM
+    stock = at_risk_by_farm.get(farms[node - 1].id)
+    if stock is None:
+        return _DROP_PENALTY_SAFE_KM
+    hours = stock.hours_until_spoilage
+    if hours is None:
+        return _DROP_PENALTY_AT_RISK_KM
+    if hours <= 12.0:
+        return _DROP_PENALTY_URGENT_KM
+    if hours <= 48.0:
+        return _DROP_PENALTY_SOON_KM
+    return _DROP_PENALTY_AT_RISK_KM
 
 
 def _try_ortools(
@@ -74,6 +102,7 @@ def _try_ortools(
     time_limit_s: int,
     farms: list[Farm],
     demand_points: list[DemandPoint],
+    at_risk_stock: list[AtRiskStock] | None = None,
 ) -> RoutePlan | None:
     n = len(distance_matrix_km)
     if n < 2 or len(trucks) == 0:
@@ -118,6 +147,17 @@ def _try_ortools(
         True,
         "Distance",
     )
+
+    # Without disjunctions, CVRP demands full coverage: whenever regional
+    # demand exceeds allocated capacity (or the drive cap), the model is
+    # infeasible, OR-Tools returns nothing, and the cap-less greedy fallback
+    # produces illegal 18h+ routes. Urgency-weighted drop penalties keep
+    # coverage the overwhelming priority — and make the solver sacrifice
+    # comfortable farms first when capacity genuinely runs out.
+    at_risk_by_farm = {s.farm_id: s for s in (at_risk_stock or [])}
+    for node in range(1, n):
+        penalty_m = int(_drop_penalty_km(node, farms, at_risk_by_farm) * 1000)
+        routing.AddDisjunction([manager.NodeToIndex(node)], penalty_m)
 
     params = pywrapcp.DefaultRoutingSearchParameters()
     params.first_solution_strategy = (
@@ -426,6 +466,7 @@ def solve_vrp(
         tl,
         farms,
         demand_points,
+        at_risk_stock,
     )
     if plan is not None and any(r.stops for r in plan.routes):
         return _reorder_pickups_first(plan, farms, demand_points, distance_matrix)
