@@ -16,7 +16,7 @@ const TOKEN_COOKIE = 'agentfarm_token';
 const ACCESS = {
   '/dashboard': ['fpo'],
   '/scenario': ['fpo'],
-  '/runs': ['fpo'],
+  '/runs': ['fpo', 'driver'],
   '/advisor': ['fpo', 'farmer'],
   '/farmer': ['fpo', 'farmer'],
   '/driver': ['fpo', 'driver'],
@@ -37,7 +37,7 @@ function decodeClaims(token) {
     const claims = JSON.parse(json);
     if (claims.exp && claims.exp * 1000 < Date.now()) return null;
     return claims;
-  } catch {
+  } catch (_) {
     return null;
   }
 }

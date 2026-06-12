@@ -7,8 +7,11 @@ import { CircleMarker, Popup } from 'react-leaflet';
  */
 function colorForRisk(risk) {
   switch ((risk || '').toLowerCase()) {
+    case 'severe':
     case 'high':   return { stroke: '#FF4444', fill: '#FF4444' };
+    case 'warning':
     case 'medium': return { stroke: '#FF9800', fill: '#FF9800' };
+    case 'normal':
     case 'low':    return { stroke: '#4CAF50', fill: '#4CAF50' };
     default:       return { stroke: '#4CAF50', fill: '#4CAF50' };
   }

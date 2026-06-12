@@ -41,6 +41,8 @@ export default function InnerMap({
   routes = [],
   truckPositions = [],
   selectedTruckId = null,
+  weatherRiskByFarm = {},
+  weatherRiskByMandi = {},
 }) {
   if (typeof window !== 'undefined' && (!Array.isArray(routes) || routes.length === 0)) {
     // eslint-disable-next-line no-console
@@ -83,7 +85,7 @@ export default function InnerMap({
         <FarmMarker key={farm.id} farm={farm} />
       ))}
       {demandPoints.map((dp) => (
-        <MandiMarker key={dp.id} mandi={dp} />
+        <MandiMarker key={dp.id} mandi={dp} riskLevel={weatherRiskByMandi[dp.id] || 'normal'} />
       ))}
       {(routes || []).map((route, idx) => {
         const vehicleId = route.truckId ?? route.vehicle_id ?? route.id;
@@ -96,6 +98,7 @@ export default function InnerMap({
             route={route}
             isSelected={isSelected}
             isDeemphasized={isDeemphasized}
+            weatherRiskByFarm={weatherRiskByFarm}
           />
         );
       })}

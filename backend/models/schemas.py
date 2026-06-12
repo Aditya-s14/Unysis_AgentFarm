@@ -316,3 +316,31 @@ class PositionIngestResponse(BaseModel):
     position: TruckPosition
     alert_triggered: bool = False
     alert: RouteDeviationAlert | None = None
+
+
+# --- Farmer crop-ready toggle (T4) ---
+
+
+class FarmReadyState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    farm_id: str
+    ready: bool
+    expires_in_seconds: int | None = None
+
+
+class FarmReadyPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ready: bool
+
+
+# --- Mandi arrival confirmation (T6) ---
+
+
+class MandiArrivalConfirm(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    demand_actual: float = Field(ge=0)
+    delivery_time_actual_hours: float = Field(ge=0)
+    crop_type: str | None = None

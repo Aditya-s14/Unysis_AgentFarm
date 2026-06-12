@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Head from 'next/head';
+import { useAppContext } from '@/context/AppContext';
 
 const AGENTS = [
   { tag: '01', title: 'Weather', body: 'Risk classification per farm via OpenWeather' },
@@ -27,9 +29,29 @@ const QUOTES = [
 /**
  * Landing page — introduces AgentFarm and links into the operator surfaces.
  */
+const ROLE_HOME = { fpo: '/dashboard', farmer: '/farmer', mandi: '/mandi' };
+
 export default function HomePage() {
   const [revealed, setRevealed] = useState(false);
+  const { user } = useAppContext();
+  const loading = false;
+  const router = useRouter();
+
   useEffect(() => setRevealed(true), []);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+    if (user.role === 'driver') {
+      const runId = typeof window !== 'undefined' ? localStorage.getItem('agentfarm_run_id') : null;
+      router.replace(runId ? `/driver/${runId}/${user.entityId}` : '/runs');
+    } else {
+      router.replace(ROLE_HOME[user.role] || '/login');
+    }
+  }, [user, loading, router]);
 
   return (
     <>

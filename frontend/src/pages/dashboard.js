@@ -5,6 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend,
 } from 'recharts';
 import DashboardLayout from '@/components/Dashboard/DashboardLayout';
+import withAuth from '@/components/withAuth';
 import OverviewPanel from '@/components/Dashboard/OverviewPanel';
 import FpoApprovalPanel from '@/components/Dashboard/FpoApprovalPanel';
 import WeatherRiskPanel from '@/components/Dashboard/WeatherRiskPanel';
@@ -19,6 +20,7 @@ import { getBreakdownIncidents, getRun } from '@/api/client';
 import useTruckTracking from '@/hooks/useTruckTracking';
 import { displayTruckId } from '@/utils/truckDisplay';
 import { EM_DASH, MIDDOT, SECTION, WARN } from '@/utils/uiChars';
+import { computeETA } from '@/utils/eta';
 import useRuns, { useCachedRunResponse } from '@/hooks/useRuns';
 import { useAppContext } from '@/context/AppContext';
 import {
@@ -127,7 +129,7 @@ function mergeRunPlanIntoCache(cached, runResp) {
   };
 }
 
-export default function DashboardPage() {
+function DashboardPage() {
   const { data: runs, loading: runsLoading } = useRuns();
   const initialCached = useCachedRunResponse();
   const [cached, setCached] = useState(initialCached);
@@ -231,7 +233,7 @@ export default function DashboardPage() {
         stops: r.stops
           .slice()
           .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
-          .map((s) => ({ lat: s.lat, lng: s.lng, label: s.label })),
+          .map((s) => ({ lat: s.lat, lng: s.lng, label: s.label, demand_point_id: s.demand_point_id ?? null })),
       }));
   }, [cached]);
 
@@ -272,6 +274,37 @@ export default function DashboardPage() {
     (cached?.at_risk_stock || []).forEach((s) => { m[s.farm_id] = s; });
     return m;
   }, [cached]);
+
+  const weatherRiskByFarm = useMemo(() => {
+    const m = {};
+    DEMO_FARMS.forEach((farm) => { m[farm.id] = getFarmRiskLevel(farm.id, atRiskMap); });
+    return m;
+  }, [atRiskMap]);
+
+  const mapFarmsWithRisk = useMemo(
+    () => DEMO_MAP_FARMS.map((f) => ({ ...f, risk_level: weatherRiskByFarm[f.id] || 'normal' })),
+    [weatherRiskByFarm],
+  );
+
+  const weatherRiskByMandi = useMemo(() => {
+    const m = {};
+    (cached?.at_risk_stock || []).forEach((s) => {
+      // Map farm-level risk upstream to their assigned mandis via routes
+      const route = rawRoutes.find((r) =>
+        (r.stops || []).some((stop) => !stop.demand_point_id && stop.label === s.farm_id)
+      );
+      if (!route) return;
+      (route.stops || []).filter((st) => st.demand_point_id).forEach((st) => {
+        const existing = m[st.demand_point_id];
+        const risk = s.hours_until_spoilage != null && s.hours_until_spoilage < 6 ? 'severe'
+          : s.hours_until_spoilage != null && s.hours_until_spoilage < 12 ? 'warning' : 'normal';
+        if (!existing || risk === 'severe' || (risk === 'warning' && existing === 'normal')) {
+          m[st.demand_point_id] = risk;
+        }
+      });
+    });
+    return m;
+  }, [cached, rawRoutes]);
 
   const demandPoints = useMemo(() => getDemandPointsFromCache(cached), [cached]);
 
@@ -438,10 +471,6 @@ export default function DashboardPage() {
         )}
 
         {runId && notificationsDispatched && (
-          <DeviationAlertPanel alerts={deviationAlerts} />
-        )}
-
-        {runId && notificationsDispatched && (
           <BreakdownIncidentPanel
             runId={runId}
             incidents={breakdownIncidents}
@@ -496,6 +525,12 @@ export default function DashboardPage() {
             {/* ---- OVERVIEW tab -------------------------------------------------------------------------------------- */}
             {activeTab === 'overview' && (
               <>
+                {runId && notificationsDispatched && deviationAlerts.length > 0 && (
+                  <div className="mt-6">
+                    <DeviationAlertPanel alerts={deviationAlerts} />
+                  </div>
+                )}
+
                 {/* Waste comparison bar chart */}
                 {kpis && (
                   <div className="mt-6">
@@ -528,11 +563,13 @@ export default function DashboardPage() {
                     )}
                     <div ref={mapPanelRef}>
                       <MapView
-                        farms={DEMO_MAP_FARMS}
+                        farms={mapFarmsWithRisk}
                         demandPoints={DEMO_MAP_MANDIS}
+                        weatherRiskByMandi={weatherRiskByMandi}
                         routes={routesForMap}
                         truckPositions={truckPositions}
                         selectedTruckId={selectedTruckId}
+                        weatherRiskByFarm={weatherRiskByFarm}
                       />
                     </div>
                   </SectionCard>
@@ -904,11 +941,12 @@ export default function DashboardPage() {
                 >
                   <div ref={mapPanelRef}>
                     <MapView
-                      farms={DEMO_MAP_FARMS}
+                      farms={mapFarmsWithRisk}
                       demandPoints={DEMO_MAP_MANDIS}
                       routes={routesForMap}
                       truckPositions={truckPositions}
                       selectedTruckId={selectedTruckId}
+                      weatherRiskByFarm={weatherRiskByFarm}
                     />
                   </div>
                 </SectionCard>
@@ -1339,16 +1377,6 @@ function SummaryStat({ label, value }) {
  * Assumes truck departs depot at startHour (default 6:00 AM) at avgSpeedKmh (default 40 km/h).
  * Returns a formatted time string like "9:45 AM", or "TBD" when distance is unavailable.
  */
-function computeETA(distanceKm, startHour = 6, avgSpeedKmh = 40) {
-  if (!distanceKm || distanceKm <= 0) return 'TBD';
-  const totalMin   = Math.round((distanceKm / avgSpeedKmh) * 60);
-  const etaTotalMin = startHour * 60 + totalMin;
-  const h   = Math.floor(etaTotalMin / 60) % 24;
-  const m   = etaTotalMin % 60;
-  const period = h >= 12 ? 'PM' : 'AM';
-  const h12 = h % 12 || 12;
-  return `${h12}:${m.toString().padStart(2, '0')} ${period}`;
-}
 
 function LegendDot({ color, label }) {
   return (
@@ -1358,3 +1386,5 @@ function LegendDot({ color, label }) {
     </div>
   );
 }
+
+export default withAuth(DashboardPage, ['fpo']);

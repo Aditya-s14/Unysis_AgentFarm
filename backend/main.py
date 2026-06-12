@@ -18,6 +18,8 @@ from routes.advisor import router as advisor_router
 from routes.auth import router as auth_router
 from routes.breakdown import router as breakdown_router
 from routes.reroute import router as reroute_router
+from routes.farmer import router as farmer_router
+from routes.mandi import router as mandi_router
 from routes.runs import router as runs_router
 from routes.tracking import router as tracking_router
 from routes.scenario import router as scenario_router
@@ -88,6 +90,8 @@ app.include_router(reroute_router, prefix="/api")
 # left outside the global gate — revisit together at AUTH_ENABLED flip time.
 app.include_router(breakdown_router, prefix="/api")
 app.include_router(tracking_router, prefix="/api")
+app.include_router(farmer_router, prefix="/api")
+app.include_router(mandi_router, prefix="/api")
 
 
 # --- Global exception handler ---

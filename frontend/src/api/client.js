@@ -142,4 +142,28 @@ export async function logOutcome(outcomeBody) {
   return data;
 }
 
+/** GET /api/farmer/:farmId/ready — get crop-ready state from Redis. */
+export async function getFarmerReady(farmId) {
+  const { data } = await client.get(`/farmer/${farmId}/ready`);
+  return data;
+}
+
+/** PATCH /api/farmer/:farmId/ready — set crop-ready state (24h TTL in Redis). */
+export async function patchFarmerReady(farmId, ready) {
+  const { data } = await client.patch(`/farmer/${farmId}/ready`, { ready });
+  return data;
+}
+
+/** POST /api/run/:runId/farm/:farmId/arrival — farmer confirms truck arrival. */
+export async function postFarmArrival(runId, farmId) {
+  const { data } = await client.post(`/run/${runId}/farm/${farmId}/arrival`);
+  return data;
+}
+
+/** POST /api/run/:runId/mandi/:mandiId/confirm — mandi confirms delivery arrival, writes to plan_outcomes. */
+export async function postMandiConfirm(runId, mandiId, body) {
+  const { data } = await client.post(`/run/${runId}/mandi/${mandiId}/confirm`, body);
+  return data;
+}
+
 export default client;
