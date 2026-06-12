@@ -57,6 +57,34 @@ class Settings(BaseSettings):
     # gives some slack for cross-border districts.
     max_farm_mandi_km: float = 150.0
 
+    # Farmer notifications (SMS / voice fallback when plan is ready)
+    NOTIFY_ENABLED: bool = False
+    NOTIFY_PROVIDER: str = "mock"  # mock | msg91 | twilio
+    MSG91_AUTH_KEY: str = ""
+    MSG91_SENDER_ID: str = "KISANM"
+    MSG91_TEMPLATE_ID: str = ""
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_FROM_NUMBER: str = ""
+    NOTIFY_SPOILAGE_HOURS: float = 24.0
+    NOTIFY_VOICE_SPOILAGE_HOURS: float = 12.0
+    NOTIFY_ALL_ROUTED: bool = False
+    NOTIFY_REQUIRE_APPROVAL: bool = True
+    FIELD_OFFICER_PHONE: str = ""
+
+    # Vehicle breakdown assistance (live incident re-planning)
+    BREAKDOWN_ENABLED: bool = True
+    BREAKDOWN_AUTO_NOTIFY: bool = False
+
+    # Live truck GPS tracking and route deviation alerts
+    TRACKING_ENABLED: bool = True
+    TRACKING_INGEST_KEY: str = ""
+    DEVIATION_THRESHOLD_KM: float = 3.0
+    DEVIATION_DEBOUNCE_SECONDS: int = 120
+    DEVIATION_ALERT_COOLDOWN_MIN: int = 15
+    TRACKING_POSITION_TTL_HOURS: int = 24
+    TRACKING_STALE_MINUTES: int = 10
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -4,6 +4,7 @@ from .db_models import (
     Base,
     DemandPointRow,
     FarmRow,
+    NotificationLogRow,
     PlanOutcomeRow,
     PlanTable,
     RunLogRow,
@@ -32,6 +33,7 @@ from .schemas import (
 __all__ = [
     "Base",
     "FarmRow",
+    "NotificationLogRow",
     "DemandPointRow",
     "TruckRow",
     "PlanTable",

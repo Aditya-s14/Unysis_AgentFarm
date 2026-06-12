@@ -11,6 +11,7 @@ This document explains **every degradation path** in the backend: what fails, wh
 3. **Live weather on weather fallback** — When OpenWeather is unavailable, all farms use **`live_weather` rules** (not scripted heat/monsoon overlays). The user’s selected scenario is preserved as `requested_scenario_type` for transparency only.
 4. **Never crash the weather step** — `fetch_weather()` never raises; it always returns `{events, meta}`.
 5. **Postgres required at startup; Redis optional** — The app starts without Redis ping; caches and advisor sessions degrade.
+6. **Last-mile comms without internet** — When farmers and drivers lack broadband or smartphone data, the system still delivers pickup instructions via **cellular SMS and optional voice** after FPO approval. The optimizer may run on a connected control-room link; field actors only need a basic mobile signal.
 
 ---
 
@@ -60,6 +61,8 @@ flowchart TB
   DEM --> INV --> LOG --> VRP --> VAL
   VAL -->|max retries| HR["human_review"]
   LOG --> store
+  VAL --> NOTIFY["SMS/voice alerts\n(held until FPO approve)"]
+  NOTIFY --> LOG2[("notification_logs")]
 ```
 
 ---
@@ -480,22 +483,29 @@ Use these fields to determine which fallback ran:
 | `agent_traces[].agent_name` | Traces API | `blocked_plan`, `retry_prep`, `validator`, … |
 | `validation_result.warnings` | Plan | `ALL_SEVERE_WEATHER`, … |
 | `human_review` | Scenario response | `true` = max retries or blocked inputs |
+| `approval_status` | `GET /api/run/{id}` | `pending` / `approved` / `dispatched` |
+| `notifications_dispatched_at` | Plan row / run API | When FPO-triggered SMS/voice went out |
+| `GET /api/run/{id}/notifications` | Audit API | Per-phone send status, channel, message body |
 | `GET /health/ready` | Ops | `503` = Postgres or Redis unhealthy |
 
 ---
 
 ## 12. What still works when X is down?
 
-| Failure | Pipeline run? | Routes? | Weather panel? | Advisor? |
-|---------|---------------|---------|----------------|----------|
-| No OpenWeather key | ✅ | ✅ | Simulated + live fallback rules | ✅ |
-| Internet outage (no routing APIs) | ✅ | ✅ (Haversine) | Simulated if no OW | ✅ |
-| Redis down | ✅ | ✅ | ✅ if OW key works | ✅ (no memory) |
-| DB down mid-run | ✅ | ✅ | ✅ | Limited context |
-| DB down at startup | ❌ | — | — | — |
-| 0 trucks | ❌ **422** | — | — | — |
-| OR-Tools timeout | ✅ | Greedy routes | — | — |
-| Validator can’t fix plan | ✅ | Plan + `human_review` | — | — |
+| Failure | Pipeline run? | Routes? | Weather panel? | Advisor? | Farmer SMS/voice? |
+|---------|---------------|---------|----------------|----------|-------------------|
+| No OpenWeather key | ✅ | ✅ | Simulated + live fallback rules | ✅ | ✅ after FPO approve* |
+| Internet outage (no routing APIs) | ✅ | ✅ (Haversine) | Simulated if no OW | ✅ | ✅ after FPO approve* |
+| Redis down | ✅ | ✅ | ✅ if OW key works | ✅ (no memory) | ✅ after FPO approve* |
+| DB down mid-run | ✅ | ✅ | ✅ | Limited context | ⚠️ audit log may fail |
+| DB down at startup | ❌ | — | — | — | — |
+| 0 trucks | ❌ **422** | — | — | — | — |
+| OR-Tools timeout | ✅ | Greedy routes | — | — | ✅ after FPO approve* |
+| Validator can’t fix plan | ✅ | Plan + `human_review` | — | — | ✅ after FPO approve* |
+| `NOTIFY_ENABLED=false` | ✅ | ✅ | ✅ | ✅ | ❌ skipped |
+| Before FPO approval | ✅ | ✅ | ✅ | ✅ | ⏸ held |
+
+\* Requires `NOTIFY_ENABLED=true`, farm `notify_opt_in`, phone on file, and `POST /api/run/{run_id}/approve`. Farmers/drivers do **not** need internet — only GSM/SMS-capable phones.
 
 ---
 
@@ -517,6 +527,8 @@ pytest tests/test_resilience -q
 | `test_weather_live_fallback.py` | heat_wave request + no API → live_weather rules |
 
 Also: `tests/test_pipeline_smoke.py` for end-to-end with mocked externals.
+
+`tests/test_notifications/` — FPO approval gateway, alert builder, mock SMS dispatch.
 
 ---
 
@@ -542,6 +554,290 @@ Also: `tests/test_pipeline_smoke.py` for end-to-end with mocked externals.
 | Input 422 | `backend/routes/scenario.py` |
 | Run / trace APIs | `backend/routes/runs.py` |
 | UI weather panel | `frontend/src/utils/weatherSummary.js`, `WeatherRiskPanel.jsx` |
+| Farmer SMS/voice + FPO gateway | `backend/tools/notifications/`, `backend/routes/runs.py` |
+| FPO approval UI | `frontend/src/components/Dashboard/FpoApprovalPanel.jsx` |
+
+---
+
+## 15. Farmer & driver notifications — offline last-mile comms
+
+### 15.1 Why this exists (internet connectivity loss)
+
+Rural supply chains often split into two connectivity zones:
+
+| Zone | Who | Typical connectivity | Needs from AgentFarm |
+|------|-----|----------------------|----------------------|
+| **Control room** | FPO officer, ops desk | Broadband / office Wi‑Fi (may degrade) | Run optimizer, review routes on dashboard |
+| **Field** | Farmers, truck drivers | Feature phone or basic smartphone; **no reliable mobile data** | Pickup time, truck ID, mandi name, spoilage urgency |
+
+When the **internet is down or unreliable** at the farm or on the road:
+
+- Farmers **cannot** open the web dashboard, WhatsApp links, or app push notifications that require data.
+- Truck drivers **cannot** receive live map updates or in-app dispatch.
+- The pipeline itself may still complete using fallbacks in §§2–4 (Haversine distances, synthetic weather, greedy VRP) — but **a plan sitting only in Postgres is useless to someone who never sees it**.
+
+**SMS and voice over the cellular network (2G/3G/4G voice + SMS)** are the deliberate last-mile fallback: they work on basic phones without a data plan, in many areas where broadband is absent. This is not a substitute for the optimizer’s upstream internet (OpenWeather, routing APIs); it is the **downstream delivery channel** that closes the loop between “plan computed” and “farmer loads the truck”.
+
+```mermaid
+flowchart TB
+  subgraph connected["Connected zone (FPO / cloud)"]
+    UI["Dashboard / API"]
+    PIPE["LangGraph pipeline\nweather → demand → logistics"]
+    PG[("PostgreSQL\nplan + scenario_snapshot")]
+    UI --> PIPE --> PG
+  end
+
+  subgraph degraded["Degraded upstream (optional)"]
+    OW["OpenWeather ❌"]
+    MAPS["ORS / OSRM / Google ❌"]
+    OW -.->|fallback| PIPE
+    MAPS -.->|Haversine| PIPE
+  end
+
+  subgraph field["Field zone (no internet required)"]
+    F1["Farmer feature phone\nSMS only"]
+    F2["Farmer smartphone\nno data plan"]
+    T1["Truck driver\nSMS only"]
+  end
+
+  PG --> FPO["FPO reviews plan\nApprove & Notify"]
+  FPO --> SMSGW["SMS/voice provider\nmock | MSG91 | Twilio"]
+  SMSGW -->|GSM SMS| F1
+  SMSGW -->|GSM SMS| F2
+  SMSGW -->|GSM SMS| T1
+  SMSGW -->|voice call| F2
+```
+
+**Why this matters during an internet outage**
+
+1. **Upstream outage** — Routing APIs and OpenWeather may fail; the system still produces routes (§3) and risk scores (§2). SMS carries the *result* of that degraded planning to people who would otherwise be uninformed.
+2. **Downstream isolation** — Even when the control room *has* internet, farmers in remote blocks often do not. Notifications are the primary channel, not a nice-to-have.
+3. **Spoilage clock keeps ticking** — Inventory urgency (< 24 h / < 12 h thresholds) does not wait for connectivity to return. Voice + SMS escalate time-critical pickups without requiring the farmer to poll a website.
+4. **Human gate before blast** — Because upstream fallbacks can produce imperfect plans (`human_review`, Haversine distances), the **FPO approval gateway** prevents auto-sending bad pickup instructions during a connectivity crisis.
+
+### 15.2 End-to-end flow
+
+```mermaid
+sequenceDiagram
+  participant FPO as FPO officer (connected)
+  participant API as FastAPI backend
+  participant PG as PostgreSQL
+  participant F as Farmer (SMS only)
+  participant D as Truck driver (SMS only)
+
+  FPO->>API: POST /api/scenario/run
+  API->>API: Pipeline + fallbacks (weather, Haversine, VRP)
+  API->>PG: Persist plan + scenario_snapshot
+  API->>API: dispatch_farm_alerts (held if NOTIFY_REQUIRE_APPROVAL)
+  Note over API,F: No farmer SMS yet — pending approval
+
+  FPO->>API: Review dashboard (routes, KPIs, human_review flag)
+  FPO->>API: POST /api/run/{run_id}/approve
+  API->>PG: approved_at, notifications_dispatched_at
+  API->>F: SMS pickup alert (English/Hindi)
+  opt spoilage under 12h + channel both/voice
+    API->>F: Voice call with same script
+  end
+  API->>D: SMS route assignment
+  API->>PG: notification_logs audit rows
+```
+
+**FPO approval gateway (default):** notifications are **held** until the officer clicks **Approve & Notify** on the dashboard (`POST /api/run/{run_id}/approve`). After approval, alerts send even when `human_review` is true — the officer explicitly overrides the automated caution flag.
+
+```mermaid
+flowchart TD
+  RUN["Scenario run completes\norchestrator_exit"] --> SNAP["Store scenario_snapshot\nin run_log detail_json"]
+  SNAP --> ENABLED{NOTIFY_ENABLED?}
+  ENABLED -->|false| SKIP["No outbound messages"]
+  ENABLED -->|true| HOLD{NOTIFY_REQUIRE_APPROVAL?}
+  HOLD -->|true| WAIT["Hold farmer + driver SMS\nlog: pending FPO approval"]
+  HOLD -->|false| AUTO["Auto-dispatch if plan valid"]
+  WAIT --> FPO["FPO reviews dashboard\nFpoApprovalPanel"]
+  FPO --> APPROVE["POST /api/run/{run_id}/approve"]
+  APPROVE --> REBUILD["Rebuild state from snapshot"]
+  REBUILD --> BUILD["build_farm_alerts +\nbuild_truck_alerts"]
+  BUILD --> SEND["Provider: mock | msg91 | twilio"]
+  SEND --> LOG[("notification_logs")]
+  AUTO --> BUILD
+
+  WAIT --> DIGEST["Optional officer digest SMS\nFIELD_OFFICER_PHONE\nwhen human_review"]
+```
+
+### 15.3 Who gets what
+
+| Recipient | Channel | When | Message content |
+|-----------|---------|------|-----------------|
+| **Farmer** (routed, `notify_opt_in`, has `phone`) | SMS | Spoilage &lt; `NOTIFY_SPOILAGE_HOURS` (default 24 h), or all routed if `NOTIFY_ALL_ROUTED=true` | Truck ID, pickup time, kg, crop, mandi, weather note |
+| **Farmer** (urgent) | SMS + voice | Spoilage &lt; `NOTIFY_VOICE_SPOILAGE_HOURS` (default 12 h) and `notify_channel` is `both` or `voice` | Same script read aloud (English/Hindi) |
+| **Truck driver** (`driver_phone`) | SMS | After FPO approve | Route summary: farms, mandis, stop count, start time |
+| **Field officer** | SMS (optional) | Before approve, if `human_review` and `FIELD_OFFICER_PHONE` set | Digest: urgent farm count, validation issues |
+
+Farm and truck records carry contact fields (`phone`, `driver_phone`, `preferred_language`, `notify_channel`, `notify_opt_in`). Demo fixtures and `demo_contacts.py` back-fill missing phones for local testing.
+
+**Alert eligibility (farmers)**
+
+- Must appear on a **route stop** with `notify_opt_in=true` and a phone number.
+- Default: only farms with **&lt; 24 h until spoilage** receive SMS (configurable). Set `NOTIFY_ALL_ROUTED=true` to notify every routed farm regardless of spoilage window.
+- `notify_channel=none` → excluded entirely.
+
+**Templates** (`backend/tools/notifications/templates.py`)
+
+- **English / Hindi** SMS capped at 160 characters; includes urgency line and weather disclaimer when upstream weather used stale/synthetic fallback.
+- Example SMS: *"Kisan Mitra: Nandi Valley - Truck tr-001 pickup ~6:30 AM. Send 1200kg tomato to Yeshwanthpur APMC. URGENT: spoilage in 8h."*
+
+### 15.4 Configuration
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `NOTIFY_ENABLED` | `false` | Master switch; set `true` to send (mock logs or real provider) |
+| `NOTIFY_PROVIDER` | `mock` | `mock` (stdout log), `msg91`, or `twilio` |
+| `NOTIFY_REQUIRE_APPROVAL` | `true` | Hold alerts until `POST .../approve` |
+| `NOTIFY_SPOILAGE_HOURS` | `24` | SMS threshold (hours until spoilage) |
+| `NOTIFY_VOICE_SPOILAGE_HOURS` | `12` | Voice escalation threshold |
+| `NOTIFY_ALL_ROUTED` | `false` | If `true`, SMS all routed farms, not only urgent |
+| `FIELD_OFFICER_PHONE` | `""` | Optional pre-approval digest when `human_review` |
+| `MSG91_TEMPLATE_ID` | — | DLT template for MSG91 (production India) |
+
+**API endpoints**
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/run/{run_id}/approve` | FPO sign-off → dispatch notifications |
+| `GET` | `/api/run/{run_id}/notifications` | Audit log of sent/failed messages |
+| `GET` | `/api/run/{run_id}` | Includes `approval_status`, `approved_at`, `notifications_dispatched_at` |
+
+**Approval status values:** `pending` → `approved` (after approve, before dispatch completes) → `dispatched`.
+
+### 15.5 Behaviour matrix
+
+| Condition | Behaviour |
+|-----------|-----------|
+| `NOTIFY_ENABLED=false` | No outbound messages; pipeline unaffected |
+| `NOTIFY_REQUIRE_APPROVAL=true` (default) | Farmer/truck SMS **held** after run; officer must approve |
+| Before FPO approval | No farmer/driver SMS; optional officer digest if `human_review` |
+| After `POST .../approve` | Notify routed farms + truck drivers; **FPO overrides** `human_review` block |
+| `human_review` + invalid plan (pre-approve) | Alerts skipped; officer digest only |
+| Empty routes / `pipeline_blocked` | No alerts |
+| Run without `scenario_snapshot` (old runs) | Approve returns **422** — re-run scenario after upgrade |
+| Provider failure | Logged to `notification_logs` with `status=failed`; approve still completes |
+| Internet outage at **provider** | SMS gateway may fail; audit log records failure; retry requires new approve flow or manual resend (future) |
+
+### 15.6 Observability
+
+| Signal | Location | Meaning |
+|--------|----------|---------|
+| `approval_status` | `GET /api/run/{id}` | `pending` / `approved` / `dispatched` |
+| `notifications_dispatched_at` | Plan row | Timestamp of last dispatch |
+| `notification_logs` table | DB / `GET .../notifications` | Per-message audit: phone, channel, status, body |
+| Backend stdout (mock) | Docker / uvicorn logs | `MOCK SMS → +91…` / `MOCK VOICE → +91…` |
+| `FpoApprovalPanel` | Dashboard | Status badge + **Approve & Notify** button |
+
+### 15.7 Modules & tests
+
+| Area | File |
+|------|------|
+| Alert building | `backend/tools/notifications/alert_builder.py` |
+| Templates (en/hi) | `backend/tools/notifications/templates.py` |
+| Dispatch + officer digest | `backend/tools/notifications/dispatcher.py` |
+| FPO approve gateway | `backend/tools/notifications/approval.py` |
+| State rebuild from snapshot | `backend/tools/notifications/run_state.py` |
+| Mock provider | `backend/tools/notifications/providers/mock.py` |
+| Post-run hook | `backend/agents/orchestrator.py` |
+| Approve API | `backend/routes/runs.py` |
+| Dashboard UI | `frontend/src/components/Dashboard/FpoApprovalPanel.jsx` |
+
+```bash
+cd backend
+pytest tests/test_notifications -q
+```
+
+**Local test checklist**
+
+1. Set `NOTIFY_ENABLED=true` and `NOTIFY_PROVIDER=mock` in `.env`; rebuild/restart backend (Docker or uvicorn — not both on port 8000).
+2. Run a scenario from the dashboard (creates `scenario_snapshot`).
+3. Click **Approve & Notify** → expect `MOCK SMS` lines in backend logs and rows in `GET /api/run/{id}/notifications`.
+
+**PowerShell (Windows) — check status, approve, audit log**
+
+```powershell
+$runId = "your-run-id-here"
+
+# Approval status
+Invoke-RestMethod -Uri "http://localhost:8000/api/run/$runId" | ConvertTo-Json -Depth 5
+
+# Approve (if pending)
+Invoke-RestMethod -Method POST -Uri "http://localhost:8000/api/run/$runId/approve" `
+  -ContentType "application/json" -Body "{}" | ConvertTo-Json -Depth 5
+
+# Full notification audit (phone, channel, message_body)
+Invoke-RestMethod -Uri "http://localhost:8000/api/run/$runId/notifications" | ConvertTo-Json -Depth 10
+```
+
+See [README.md — Manual testing: notifications](README.md#manual-testing-notifications-powershell) for curl/browser alternatives and where to find `MOCK SMS` console lines.
+
+---
+
+## 16. Vehicle breakdown assistance (live incident re-plan)
+
+When a truck breaks down **after** FPO has approved and notifications are dispatched, the officer can report the incident from the dashboard **TRANSPORT** tab. The backend runs a **partial VRP** (not a full pipeline re-run) to move pending pickups onto a spare truck.
+
+### 16.1 Flow
+
+1. `POST /api/run/{run_id}/breakdown` — requires `notifications_dispatched_at` set on the plan.
+2. Partial re-plan: pending farms on the broken route (minus `completed_farm_ids`) → spare truck.
+3. Updated `route_plan` persisted on `plans.route_plan_json`; incident stored in `run_logs` (`message=breakdown_incident`).
+4. `POST /api/run/{run_id}/breakdown/{incident_id}/approve` — delta SMS/voice to reassigned farmers, broken driver (stand down), spare driver.
+
+### 16.2 Fallbacks
+
+| Condition | Behavior |
+|-----------|----------|
+| No idle spare truck in fleet | HTTP **422** — add an unassigned truck or pass `spare_truck_id` |
+| OR-Tools partial VRP fails | Greedy nearest-neighbor assign (same as full logistics fallback) |
+| Partial plan fails validator | Incident still saved with `validation.valid=false`; FPO can review before approve |
+| `NOTIFY_ENABLED=false` | Re-plan persists; delta dispatch skipped (logged) |
+| `BREAKDOWN_ENABLED=false` | HTTP **503** on breakdown endpoints |
+
+### 16.3 Metadata
+
+- Incident `detail_json` includes `route_plan_before`, `route_plan_after`, `pending_farm_ids`, `spare_truck_id`.
+- Delta notifications prefix with **UPDATE:** to distinguish from initial pickup SMS.
+
+**Tests:** `pytest tests/test_breakdown -q`
+
+---
+
+## 17. Live truck GPS tracking and route deviation alerts
+
+After FPO **Approve & Notify**, drivers can post GPS via `POST /api/run/{run_id}/tracking/{truck_id}/position`. The dashboard polls `GET /api/run/{run_id}/tracking` every ~15s for live map markers.
+
+### 17.1 Deviation detection
+
+1. Compute distance from reported `(lat, lng)` to the truck's planned route polyline (haversine to interpolated segments).
+2. **Off-route** when distance > `DEVIATION_THRESHOLD_KM` (default 3 km).
+3. Alert only after sustained off-route for `DEVIATION_DEBOUNCE_SECONDS` (default 120s).
+4. Repeat alerts suppressed for `DEVIATION_ALERT_COOLDOWN_MIN` (default 15 min) unless the truck returns on-route first.
+5. Broken-down trucks (active breakdown incident) reject GPS ingest with HTTP **409**.
+
+### 17.2 Notifications
+
+On confirmed deviation (when `NOTIFY_ENABLED=true`):
+
+- **Driver SMS** — return to planned route
+- **FPO SMS** (`FIELD_OFFICER_PHONE`) — digest with truck id and deviation km
+
+Alerts persisted in `run_logs` (`message=route_deviation_alert`) and `notification_logs`.
+
+### 17.3 Fallbacks
+
+| Condition | Behavior |
+|-----------|----------|
+| Redis unavailable | In-memory position cache per process; debounce may not survive restarts |
+| No road snapping | Straight segment corridor only (offline-resilient) |
+| `TRACKING_ENABLED=false` | HTTP **503** on tracking endpoints |
+| Stale GPS (> `TRACKING_STALE_MINUTES`) | Dashboard shows `stale` status; no auto-alert |
+
+**Tests:** `pytest tests/test_tracking -q`
 
 ---
 

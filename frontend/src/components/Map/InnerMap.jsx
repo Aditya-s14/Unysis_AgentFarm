@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import FarmMarker from './FarmMarker';
 import MandiMarker from './MandiMarker';
 import RoutePolyline from './RoutePolyline';
+import TruckMarker from './TruckMarker';
 
 // Centred on the Bengaluru / Karnataka tomato belt that the demo fixture uses.
 const MAP_CENTER = [13.1, 77.7];
@@ -38,6 +39,7 @@ export default function InnerMap({
   farms = [],
   demandPoints = [],
   routes = [],
+  truckPositions = [],
   selectedTruckId = null,
 }) {
   if (typeof window !== 'undefined' && (!Array.isArray(routes) || routes.length === 0)) {
@@ -97,6 +99,13 @@ export default function InnerMap({
           />
         );
       })}
+      {(truckPositions || []).map((pos) => (
+        <TruckMarker
+          key={`live-${pos.truck_id}`}
+          position={pos}
+          isSelected={hasSelection && pos.truck_id === selectedTruckId}
+        />
+      ))}
     </MapContainer>
   );
 }
