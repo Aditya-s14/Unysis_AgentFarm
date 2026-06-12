@@ -3,13 +3,41 @@
  * Matches the seed CSVs in data/: 20 farms, 10 demand points, 10 trucks.
  *
  * Farm:         { id, name, lat, lng, crop_type, acreage, typical_yield_kg,
- *                 harvest_window_start, harvest_window_end }
+ *                 harvest_window_start, harvest_window_end, phone, notify_opt_in, ... }
  * DemandPoint:  { id, name, lat, lng, point_type, base_demand_per_day }
- * Truck:        { id, capacity_kg, cost_per_km, availability_start, availability_end }
+ * Truck:        { id, capacity_kg, cost_per_km, availability_start, availability_end, driver_phone }
  */
 
+/** Demo SMS numbers — farm-001 → +919900000001, tr-001 → +919910000001 */
+function demoFarmPhone(id) {
+  const n = parseInt(String(id).replace('farm-', ''), 10);
+  return `+9199000${String(n).padStart(5, '0')}`;
+}
+
+function demoTruckPhone(id) {
+  const n = parseInt(String(id).replace('tr-', ''), 10);
+  return `+9199100${String(n).padStart(5, '0')}`;
+}
+
+function withFarmContacts(farm) {
+  return {
+    ...farm,
+    phone: demoFarmPhone(farm.id),
+    notify_opt_in: true,
+    notify_channel: 'both',
+    preferred_language: farm.id === 'farm-003' ? 'hi' : 'en',
+  };
+}
+
+function withTruckContacts(truck) {
+  return {
+    ...truck,
+    driver_phone: demoTruckPhone(truck.id),
+  };
+}
+
 // ── 20 Farms ──────────────────────────────────────────────────────────────
-export const DEMO_FARMS = [
+const _RAW_FARMS = [
   // Karnataka — Tomatoes
   { id: 'farm-001', name: 'Nandi Valley Tomatoes',          lat: 13.0827, lng: 77.5439, crop_type: 'tomato', acreage:  8.4, typical_yield_kg: 1200, harvest_window_start: '2026-03-15', harvest_window_end: '2026-05-30' },
   { id: 'farm-002', name: 'Tumkur Organic Tomato Coop',     lat: 13.3409, lng: 77.1011, crop_type: 'tomato', acreage: 11.2, typical_yield_kg: 1800, harvest_window_start: '2026-03-10', harvest_window_end: '2026-06-01' },
@@ -36,6 +64,8 @@ export const DEMO_FARMS = [
   { id: 'farm-020', name: 'Bijapur Mango Collective',       lat: 16.8244, lng: 75.7154, crop_type: 'mango',  acreage: 21.7, typical_yield_kg:  650, harvest_window_start: '2026-03-30', harvest_window_end: '2026-07-10' },
 ];
 
+export const DEMO_FARMS = _RAW_FARMS.map(withFarmContacts);
+
 // ── 10 Demand Points ──────────────────────────────────────────────────────
 export const DEMO_DEMAND_POINTS = [
   // APMC Yards
@@ -54,7 +84,7 @@ export const DEMO_DEMAND_POINTS = [
 ];
 
 // ── 10 Trucks (1-ton × 3, 3-ton × 4, 5-ton × 3) ─────────────────────────
-export const DEMO_TRUCKS = [
+const _RAW_TRUCKS = [
   { id: 'tr-001', capacity_kg: 1000, cost_per_km: 28.50, availability_start: '05:30:00', availability_end: '20:00:00' },
   { id: 'tr-002', capacity_kg: 1000, cost_per_km: 27.00, availability_start: '06:00:00', availability_end: '19:30:00' },
   { id: 'tr-003', capacity_kg: 1000, cost_per_km: 29.25, availability_start: '05:00:00', availability_end: '21:00:00' },
@@ -66,6 +96,8 @@ export const DEMO_TRUCKS = [
   { id: 'tr-009', capacity_kg: 5000, cost_per_km: 18.90, availability_start: '04:00:00', availability_end: '22:45:00' },
   { id: 'tr-010', capacity_kg: 5000, cost_per_km: 20.10, availability_start: '05:30:00', availability_end: '21:15:00' },
 ];
+
+export const DEMO_TRUCKS = _RAW_TRUCKS.map(withTruckContacts);
 
 /** Undersized fleet to trigger validator capacity retries (demo / QA). */
 export const DEMO_TRUCKS_CAPACITY_STRESS = DEMO_TRUCKS.slice(0, 3).map((t) => ({

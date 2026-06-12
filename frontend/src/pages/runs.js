@@ -2,7 +2,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import DashboardLayout from '@/components/Dashboard/DashboardLayout';
 import PlanViewer from '@/components/PlanViewer/PlanViewer';
-import { useRun, useRunTraces, useCachedRunResponse } from '@/hooks/useRuns';
+import { useRun, useCachedRunResponse } from '@/hooks/useRuns';
 import { useAppContext } from '@/context/AppContext';
 
 /**
@@ -16,7 +16,6 @@ export default function RunsPage() {
   const runId = cached?.run_id || currentRunId || null;
 
   const { data: persistedRun, loading, error } = useRun(runId);
-  const { data: traces } = useRunTraces(runId);
 
   if (!runId) {
     return (
@@ -125,7 +124,7 @@ export default function RunsPage() {
             </div>
           </div>
 
-          <PlanViewer run={runForViewer} traces={traces} />
+          <PlanViewer run={runForViewer} />
         </section>
       </DashboardLayout>
     </>

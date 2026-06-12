@@ -6,14 +6,12 @@ import {
   DEMO_FARMS,
   DEMO_DEMAND_POINTS,
   DEMO_TRUCKS,
-  DEMO_TRUCKS_CAPACITY_STRESS,
 } from '@/utils/demoFixtures';
 
 /**
  * ScenarioForm — pick a disruption template and run the backend pipeline.
  *
  * Demo fixture: 20 farms (Karnataka + Maharashtra), 10 mandis, 10 trucks.
- * Only `scenario_type` and (for capacity_stress) truck fleet differ between runs.
  */
 export default function ScenarioForm({ onRunStart, onComplete, onError }) {
   const router = useRouter();
@@ -23,14 +21,11 @@ export default function ScenarioForm({ onRunStart, onComplete, onError }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     onRunStart?.(scenarioDraft.scenarioType);
-    const trucks = scenarioDraft.scenarioType === 'capacity_stress'
-      ? DEMO_TRUCKS_CAPACITY_STRESS
-      : DEMO_TRUCKS;
     const body = {
       scenario_type: scenarioDraft.scenarioType,
       farms: DEMO_FARMS,
       demand_points: DEMO_DEMAND_POINTS,
-      trucks,
+      trucks: DEMO_TRUCKS,
     };
     try {
       const result = await run(body);
@@ -64,10 +59,7 @@ export default function ScenarioForm({ onRunStart, onComplete, onError }) {
     }
   };
 
-  const previewTrucks = scenarioDraft.scenarioType === 'capacity_stress'
-    ? DEMO_TRUCKS_CAPACITY_STRESS
-    : DEMO_TRUCKS;
-  const totalCapacity = previewTrucks.reduce((s, t) => s + t.capacity_kg, 0);
+  const totalCapacity = DEMO_TRUCKS.reduce((s, t) => s + t.capacity_kg, 0);
 
   return (
     <form
@@ -108,7 +100,7 @@ export default function ScenarioForm({ onRunStart, onComplete, onError }) {
           <span className="text-accent">{DEMO_DEMAND_POINTS.length}</span>{' '}
           <span className="text-muted">mandis</span>{' '}
           ·{' '}
-          <span className="text-accent">{previewTrucks.length}</span>{' '}
+          <span className="text-accent">{DEMO_TRUCKS.length}</span>{' '}
           <span className="text-muted">
             trucks ({totalCapacity.toLocaleString()} kg total capacity)
           </span>

@@ -71,11 +71,29 @@ class RunScenarioResponse(BaseModel):
     at_risk_stock: list[dict[str, Any]] = Field(default_factory=list)
     weather_summary: dict[str, Any] = Field(default_factory=dict)
     weather_risk_summary: dict[str, str] = Field(default_factory=dict)
+    weather_snapshot: dict[str, Any] = Field(default_factory=dict)
+    approval_status: str = "pending"
+    approved_at: str | None = None
+    notifications_dispatched_at: str | None = None
+
+
+def _validate_scenario_inputs(body: RunScenarioRequest) -> None:
+    """Reject runs with missing required inputs before invoking the graph."""
+    errors: list[str] = []
+    if not body.farms:
+        errors.append("farms list is empty")
+    if not body.demand_points:
+        errors.append("demand_points list is empty")
+    if not body.trucks:
+        errors.append("trucks list is empty")
+    if errors:
+        raise HTTPException(status_code=422, detail={"errors": errors})
 
 
 @router.post("/scenario/run", response_model=RunScenarioResponse)
 async def run_scenario_endpoint(body: RunScenarioRequest) -> RunScenarioResponse:
     """Run the full multi-agent pipeline and return the optimised plan + KPIs."""
+    _validate_scenario_inputs(body)
     try:
         req = PipelineRequest(
             farms=body.farms,
@@ -84,6 +102,11 @@ async def run_scenario_endpoint(body: RunScenarioRequest) -> RunScenarioResponse
             scenario_type=body.scenario_type,
         )
         result: PipelineResult = await run_scenario(req)
+        from tools.db import get_plan_by_run_id
+        from tools.notifications.approval import plan_approval_payload
+
+        plan_row = await get_plan_by_run_id(result.run_id)
+        approval = plan_approval_payload(plan_row)
         return RunScenarioResponse(
             run_id=result.run_id,
             plan=result.plan,
@@ -94,6 +117,10 @@ async def run_scenario_endpoint(body: RunScenarioRequest) -> RunScenarioResponse
             at_risk_stock=result.at_risk_stock,
             weather_summary=result.weather_summary,
             weather_risk_summary=result.weather_risk_summary,
+            weather_snapshot=result.weather_snapshot,
+            approval_status=approval["approval_status"],
+            approved_at=approval["approved_at"],
+            notifications_dispatched_at=approval["notifications_dispatched_at"],
         )
     except Exception as exc:
         logger.exception("POST /api/scenario/run failed")

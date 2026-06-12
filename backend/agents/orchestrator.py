@@ -17,6 +17,7 @@ Neither function calls an LLM; both are pure control flow.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -93,8 +94,12 @@ async def orchestrator_entry(state: AgentFarmState) -> AgentFarmState:
     state["agent_traces"] = [*state["agent_traces"], trace]
 
     if input_errors:
+        state["pipeline_blocked"] = True
+        state["input_errors"] = input_errors
         logger.warning("orchestrator_entry validation errors: %s", input_errors)
     else:
+        state["pipeline_blocked"] = False
+        state["input_errors"] = []
         logger.info("orchestrator_entry OK run_id=%s", run_id)
 
     return state
@@ -131,7 +136,27 @@ async def orchestrator_exit(state: AgentFarmState) -> AgentFarmState:
         )
         plan_id = str(plan_row.id)
 
+        from tools.scenario_effects import coerce_weather_events
+        from tools.weather_store import save_run_weather_snapshot
+        from tools.weather_summary import build_weather_snapshot
+
+        farms = state.get("farms") or []
+        weather_events = coerce_weather_events(state.get("weather_events") or [])
+        weather_risk = dict(state.get("weather_risk_summary") or {})
+        weather_meta = dict(state.get("weather_fetch_meta") or {})
+        weather_snapshot = build_weather_snapshot(
+            run_id=run_id,
+            scenario_type=state.get("scenario_type") or "normal",
+            farms=farms,
+            weather_events=weather_events,
+            weather_risk_summary=weather_risk,
+            weather_fetch_meta=weather_meta,
+        )
+        await save_run_weather_snapshot(run_id, weather_snapshot)
+
         at_risk_raw = state.get("at_risk_stock") or []
+        demand_points = state.get("demand_points") or []
+        trucks = state.get("trucks") or []
         kpi_detail = {
             **kpi,
             "human_review_needed": human_review_needed,
@@ -139,9 +164,30 @@ async def orchestrator_exit(state: AgentFarmState) -> AgentFarmState:
             "at_risk_stock": [
                 s.model_dump() if hasattr(s, "model_dump") else s for s in at_risk_raw
             ],
-            "weather_summary": dict(state.get("weather_summary") or {}),
-            "weather_risk_summary": dict(state.get("weather_risk_summary") or {}),
+            "weather_snapshot": weather_snapshot,
+            "weather_summary": dict(weather_snapshot.get("summary") or {}),
+            "weather_risk_summary": weather_risk,
             "demand_forecast": dict(state.get("demand_forecast") or {}),
+            "scenario_snapshot": {
+                "farms": [
+                    f.model_dump(mode="json") if hasattr(f, "model_dump") else f
+                    for f in farms
+                ],
+                "demand_points": [
+                    d.model_dump(mode="json") if hasattr(d, "model_dump") else d
+                    for d in demand_points
+                ],
+                "trucks": [
+                    t.model_dump(mode="json") if hasattr(t, "model_dump") else t
+                    for t in trucks
+                ],
+                "route_plan": route_plan.model_dump() if route_plan else {},
+                "validation_result": validation.model_dump() if validation else None,
+                "weather_fetch_meta": weather_meta,
+                "weather_risk_summary": weather_risk,
+                "retry_count": retry_count,
+                "scenario_type": state.get("scenario_type") or "normal",
+            },
         }
         if human_review_needed:
             kpi_detail["human_review_reason"] = (
@@ -161,6 +207,20 @@ async def orchestrator_exit(state: AgentFarmState) -> AgentFarmState:
 
     except Exception as exc:  # noqa: BLE001
         logger.warning("orchestrator_exit: DB persist skipped (%s)", exc)
+
+    from config import get_settings
+
+    if get_settings().NOTIFY_ENABLED:
+        from tools.notifications.dispatcher import dispatch_farm_alerts
+
+        asyncio.create_task(
+            dispatch_farm_alerts(
+                run_id=run_id,
+                state=state,
+                plan_id=plan_id,
+            ),
+            name=f"notify-{run_id}",
+        )
 
     # Assemble final_plan
     state["final_plan"] = Plan(

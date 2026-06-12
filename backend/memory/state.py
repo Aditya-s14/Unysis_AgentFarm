@@ -65,6 +65,10 @@ class AgentFarmState(TypedDict, total=False):
     # append their traces without the second overwriting the first.
     agent_traces: Annotated[list[AgentTrace], operator.add]
 
+    # Input validation (orchestrator_entry)
+    pipeline_blocked: NotRequired[bool]
+    input_errors: NotRequired[list[str]]
+
     # Derived / graph-level
     kpis: dict[str, float]       # populated by persist_node after orchestrator_exit
     human_review: bool           # True when max retries exhausted

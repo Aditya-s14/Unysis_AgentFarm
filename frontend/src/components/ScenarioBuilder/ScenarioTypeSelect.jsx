@@ -1,5 +1,5 @@
 /**
- * ScenarioTypeSelect — pill buttons for disruption templates and the retry demo.
+ * ScenarioTypeSelect — pill buttons for disruption templates.
  */
 const OPTIONS = [
   {
@@ -21,10 +21,10 @@ const OPTIONS = [
       'Baseline weather and routing; no scenario stress overlays on shelf life or distances.',
   },
   {
-    id: 'capacity_stress',
-    label: 'VALIDATOR RETRY DEMO',
+    id: 'live_weather',
+    label: 'LIVE WEATHER',
     description:
-      'Uses 3 undersized trucks (400 kg each) to trigger capacity failures and the retry loop. Weather = Normal Day.',
+      'Uses OpenWeather at each farm (no scripted rain/temp overlay). Shelf life and routing stress follow observed rain and temperature.',
   },
 ];
 

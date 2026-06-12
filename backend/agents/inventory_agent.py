@@ -33,6 +33,8 @@ from config import get_settings
 from memory.state import AgentFarmState, AgentTrace
 from models.schemas import AtRiskStock, WeatherEvent
 from tools.scenario_effects import (
+    _event_get,
+    coerce_weather_events,
     normalize_scenario_type,
     scenario_adjustment_details,
     scenario_trace_note,
@@ -68,10 +70,11 @@ def _base_shelf_days(crop_type: str) -> int:
     return _SHELF_LIFE_DAYS["default"]
 
 
-def _is_heat_wave(event: WeatherEvent | None) -> bool:
+def _is_heat_wave(event: WeatherEvent | dict[str, Any] | None) -> bool:
     if event is None:
         return False
-    return "heat_wave" in (event.description or "").lower()
+    desc = str(_event_get(event, "description") or "")
+    return "heat_wave" in desc.lower()
 
 
 def _effective_shelf_days(
@@ -80,7 +83,7 @@ def _effective_shelf_days(
     event: WeatherEvent | None,
 ) -> float:
     base = _base_shelf_days(crop_type)
-    factor = shelf_life_factor(scenario_type)
+    factor = shelf_life_factor(scenario_type, event=event)
     return base * factor
 
 
@@ -145,12 +148,12 @@ async def run(state: AgentFarmState) -> AgentFarmState:
     today = date.today()
 
     farms = state.get("farms", [])
-    weather_events = state.get("weather_events", [])
+    weather_events = coerce_weather_events(state.get("weather_events", []))
     weather_risk_summary = state.get("weather_risk_summary", {})
     raw_scenario = state.get("scenario_type_raw") or state.get("scenario_type", "")
     scenario_type = normalize_scenario_type(raw_scenario)
     state["scenario_type"] = scenario_type
-    shelf_factor = shelf_life_factor(scenario_type)
+    shelf_factor = shelf_life_factor(scenario_type)  # per-farm factor applied in loop
 
     # Build farm_id → WeatherEvent; events are in the same order as farms
     event_by_farm: dict[str, WeatherEvent] = {

@@ -1,20 +1,25 @@
 ﻿import Head from 'next/head';
 import Link from 'next/link';
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend,
 } from 'recharts';
 import DashboardLayout from '@/components/Dashboard/DashboardLayout';
 import OverviewPanel from '@/components/Dashboard/OverviewPanel';
+import FpoApprovalPanel from '@/components/Dashboard/FpoApprovalPanel';
 import WeatherRiskPanel from '@/components/Dashboard/WeatherRiskPanel';
 import KPIGrid from '@/components/KPICards/KPIGrid';
 import { resolveWeatherPanel } from '@/utils/weatherSummary';
 import MapView from '@/components/Map/MapView';
-import AgentTrace from '@/components/PlanViewer/AgentTrace';
 import TruckCard from '@/components/Transport/TruckCard';
+import BreakdownIncidentPanel from '@/components/Transport/BreakdownIncidentPanel';
+import BreakdownReportModal from '@/components/Transport/BreakdownReportModal';
+import DeviationAlertPanel from '@/components/Transport/DeviationAlertPanel';
+import { getBreakdownIncidents, getRun } from '@/api/client';
+import useTruckTracking from '@/hooks/useTruckTracking';
 import { displayTruckId } from '@/utils/truckDisplay';
 import { EM_DASH, MIDDOT, SECTION, WARN } from '@/utils/uiChars';
-import useRuns, { useCachedRunResponse, useRunTraces } from '@/hooks/useRuns';
+import useRuns, { useCachedRunResponse } from '@/hooks/useRuns';
 import { useAppContext } from '@/context/AppContext';
 import {
   DEMO_MAP_FARMS,
@@ -107,14 +112,31 @@ function isTruckDelayed(distanceKm, route) {
   return Boolean(route) && distanceKm >= DELAYED_DISTANCE_KM;
 }
 
+const LAST_RESPONSE_KEY = 'agentfarm_last_response';
+
+function mergeRunPlanIntoCache(cached, runResp) {
+  if (!cached) return cached;
+  return {
+    ...cached,
+    plan: {
+      ...cached.plan,
+      route_plan: runResp.route_plan ?? cached.plan?.route_plan,
+      validation: runResp.validation ?? cached.plan?.validation,
+    },
+    approval_status: runResp.approval_status ?? cached.approval_status,
+  };
+}
+
 export default function DashboardPage() {
   const { data: runs, loading: runsLoading } = useRuns();
-  const cached     = useCachedRunResponse();
+  const initialCached = useCachedRunResponse();
+  const [cached, setCached] = useState(initialCached);
   const { currentRunId } = useAppContext();
   const runId      = cached?.run_id || currentRunId || null;
-  const { data: freshTraces } = useRunTraces(runId);
   const [activeTab, setActiveTab]           = useState('overview');
   const [selectedTruckId, setSelectedTruckId] = useState(null);
+  const [breakdownIncidents, setBreakdownIncidents] = useState([]);
+  const [breakdownModal, setBreakdownModal] = useState(null);
   const [farmerFilters, setFarmerFilters] = useState({
     risk: 'all', crop: 'all', truck: 'all', spoilage: 'all',
   });
@@ -126,6 +148,66 @@ export default function DashboardPage() {
   });
   const mapPanelRef = useRef(null);
 
+  useEffect(() => {
+    if (initialCached) setCached(initialCached);
+  }, [initialCached]);
+
+  const notificationsDispatched = Boolean(
+    cached?.notifications_dispatched_at || cached?.approval_status === 'dispatched',
+  );
+
+  const {
+    positions: truckPositions,
+    positionByTruck,
+    alerts: deviationAlerts,
+  } = useTruckTracking(runId, notificationsDispatched);
+
+  const refreshRunCache = useCallback(async () => {
+    if (!runId || !cached) return;
+    try {
+      const runResp = await getRun(runId);
+      const merged = mergeRunPlanIntoCache(cached, runResp);
+      setCached(merged);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(LAST_RESPONSE_KEY, JSON.stringify(merged));
+      }
+    } catch {
+      /* non-fatal */
+    }
+  }, [runId, cached]);
+
+  const fetchBreakdownIncidents = useCallback(async () => {
+    if (!runId || !notificationsDispatched) {
+      setBreakdownIncidents([]);
+      return;
+    }
+    try {
+      const resp = await getBreakdownIncidents(runId);
+      setBreakdownIncidents(resp.incidents || []);
+    } catch {
+      setBreakdownIncidents([]);
+    }
+  }, [runId, notificationsDispatched]);
+
+  useEffect(() => {
+    fetchBreakdownIncidents();
+  }, [fetchBreakdownIncidents]);
+
+  const brokenTruckIds = useMemo(() => {
+    const ids = new Set();
+    breakdownIncidents.forEach((inc) => {
+      if (inc.status === 'pending_approval' || inc.status === 'approved') {
+        ids.add(inc.truck_id);
+      }
+    });
+    return ids;
+  }, [breakdownIncidents]);
+
+  const handleBreakdownReported = useCallback(async () => {
+    await refreshRunCache();
+    await fetchBreakdownIncidents();
+  }, [refreshRunCache, fetchBreakdownIncidents]);
+
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
   };
@@ -136,7 +218,6 @@ export default function DashboardPage() {
   };
 
   const kpis   = cached?.kpis;
-  const traces = (Array.isArray(freshTraces) && freshTraces.length) ? freshTraces : cached?.agent_traces;
 
   const routesForMap = useMemo(() => {
     const routes = cached?.plan?.route_plan?.routes || [];
@@ -280,7 +361,15 @@ export default function DashboardPage() {
       ? Math.max(0, Math.abs(route.distance_km))
       : 0;
     const loadPct = route ? Math.min(100, (totalLoad / truck.capacity_kg) * 100) : 0;
-    const status = !route ? 'idle' : (isTruckDelayed(distanceKm, route) ? 'delayed' : 'assigned');
+    let status = 'idle';
+    const live = positionByTruck[truck.id];
+    if (brokenTruckIds.has(truck.id)) {
+      status = 'broken_down';
+    } else if (live?.status === 'deviating') {
+      status = 'deviating';
+    } else if (route) {
+      status = isTruckDelayed(distanceKm, route) ? 'delayed' : 'assigned';
+    }
     const mandiIds = dpStops.map((s) => s.demand_point_id).filter(Boolean);
     return {
       truck,
@@ -293,7 +382,7 @@ export default function DashboardPage() {
       status,
       mandiIds,
     };
-  }), [rawRoutes, atRiskMap]);
+  }), [rawRoutes, atRiskMap, brokenTruckIds, positionByTruck]);
 
   const filteredTransportRows = useMemo(() => transportRows.filter((row) => {
     if (transportFilters.status !== 'all' && row.status !== transportFilters.status) return false;
@@ -323,6 +412,52 @@ export default function DashboardPage() {
       <Head><title>Dashboard | AgentFarm</title></Head>
       <DashboardLayout title="Dashboard" subtitle={`Run ${runId?.slice(0, 8) || EM_DASH}`}>
         <OverviewPanel lastRun={lastRun} />
+
+        {runId && (
+          <FpoApprovalPanel
+            runId={runId}
+            approvalStatus={cached?.approval_status}
+            humanReview={cached?.human_review}
+            onApproved={(resp) => {
+              if (typeof window === 'undefined' || !cached) return;
+              try {
+                const merged = {
+                  ...cached,
+                  approval_status: resp.approval_status,
+                  approved_at: resp.approved_at,
+                  notifications_dispatched_at: resp.notifications_dispatched_at,
+                };
+                window.localStorage.setItem(LAST_RESPONSE_KEY, JSON.stringify(merged));
+                setCached(merged);
+              } catch {
+                /* non-fatal */
+              }
+            }}
+          />
+        )}
+
+        {runId && notificationsDispatched && (
+          <DeviationAlertPanel alerts={deviationAlerts} />
+        )}
+
+        {runId && notificationsDispatched && (
+          <BreakdownIncidentPanel
+            runId={runId}
+            incidents={breakdownIncidents}
+            onApproved={handleBreakdownReported}
+          />
+        )}
+
+        {breakdownModal && (
+          <BreakdownReportModal
+            runId={runId}
+            truckId={breakdownModal.truckId}
+            farmStops={breakdownModal.farmStops}
+            farmsById={farmsById}
+            onClose={() => setBreakdownModal(null)}
+            onReported={handleBreakdownReported}
+          />
+        )}
 
         {cached && activeTab === 'overview' && (
           <div className="mt-6">
@@ -367,43 +502,39 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                <section className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2">
-                    <SectionCard
-                      title="▸ Optimised Routes"
-                      badge={
-                        selectedTruckId
-                          ? `SHOWING: ${displayTruckId(selectedTruckId)}`
-                          : `${routesForMap.length} ROUTES · ${DEMO_MAP_FARMS.length} FARMS · ${DEMO_MAP_MANDIS.length} MANDIS`
-                      }
-                    >
-                      <div className="px-4 pt-4">
-                        <RouteFilterBar
-                          truckIds={routeTruckIds}
-                          selectedTruckId={selectedTruckId}
-                          onSelect={setSelectedTruckId}
-                        />
-                      </div>
-                      {selectedTruckId && (
-                        <RouteSummaryPanel
-                          truckId={selectedTruckId}
-                          rawRoutes={rawRoutes}
-                          atRiskMap={atRiskMap}
-                        />
-                      )}
-                      <div ref={mapPanelRef}>
-                        <MapView
-                          farms={DEMO_MAP_FARMS}
-                          demandPoints={DEMO_MAP_MANDIS}
-                          routes={routesForMap}
-                          selectedTruckId={selectedTruckId}
-                        />
-                      </div>
-                    </SectionCard>
-                  </div>
-                  <div className="lg:col-span-1">
-                    <AgentTrace traces={traces} />
-                  </div>
+                <section className="mt-6">
+                  <SectionCard
+                    title="▸ Optimised Routes"
+                    badge={
+                      selectedTruckId
+                        ? `SHOWING: ${displayTruckId(selectedTruckId)}`
+                        : `${routesForMap.length} ROUTES · ${DEMO_MAP_FARMS.length} FARMS · ${DEMO_MAP_MANDIS.length} MANDIS`
+                    }
+                  >
+                    <div className="px-4 pt-4">
+                      <RouteFilterBar
+                        truckIds={routeTruckIds}
+                        selectedTruckId={selectedTruckId}
+                        onSelect={setSelectedTruckId}
+                      />
+                    </div>
+                    {selectedTruckId && (
+                      <RouteSummaryPanel
+                        truckId={selectedTruckId}
+                        rawRoutes={rawRoutes}
+                        atRiskMap={atRiskMap}
+                      />
+                    )}
+                    <div ref={mapPanelRef}>
+                      <MapView
+                        farms={DEMO_MAP_FARMS}
+                        demandPoints={DEMO_MAP_MANDIS}
+                        routes={routesForMap}
+                        truckPositions={truckPositions}
+                        selectedTruckId={selectedTruckId}
+                      />
+                    </div>
+                  </SectionCard>
                 </section>
               </>
             )}
@@ -661,6 +792,8 @@ export default function DashboardPage() {
                       { value: 'assigned', label: 'Assigned' },
                       { value: 'idle', label: 'Idle' },
                       { value: 'delayed', label: 'Delayed' },
+                      { value: 'deviating', label: 'Deviating' },
+                      { value: 'broken_down', label: 'Broken down' },
                     ]}
                   />
                   <FilterSelect
@@ -722,6 +855,7 @@ export default function DashboardPage() {
                         route={route}
                         farmNames={farmNames}
                         dpNames={dpNames}
+                        farmStops={farmStops}
                         totalLoad={totalLoad}
                         distanceKm={distanceKm}
                         loadPct={loadPct}
@@ -732,6 +866,17 @@ export default function DashboardPage() {
                         mandiById={mandiById}
                         farmsById={farmsById}
                         computeETA={computeETA}
+                        canReportBreakdown={
+                          notificationsDispatched
+                          && Boolean(route)
+                          && !brokenTruckIds.has(truck.id)
+                        }
+                        onReportBreakdown={(truckId, stops) => {
+                          setBreakdownModal({ truckId, farmStops: stops });
+                        }}
+                        runId={runId}
+                        livePosition={positionByTruck[truck.id]}
+                        trackingEnabled={notificationsDispatched}
                       />
                     );
                   })}
@@ -761,6 +906,7 @@ export default function DashboardPage() {
                       farms={DEMO_MAP_FARMS}
                       demandPoints={DEMO_MAP_MANDIS}
                       routes={routesForMap}
+                      truckPositions={truckPositions}
                       selectedTruckId={selectedTruckId}
                     />
                   </div>
@@ -837,7 +983,7 @@ function EmptyState() {
       <Link href="/scenario" className="text-accent hover:underline tracking-wider-2">
         RUN A SCENARIO
       </Link>{' '}
-      to populate KPIs, routes, and traces.
+      to populate KPIs and routes.
     </div>
   );
 }

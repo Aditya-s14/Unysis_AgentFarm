@@ -12,6 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field, RootModel
 # --- Inputs ---
 
 
+NotifyChannel = Literal["sms", "voice", "both", "none"]
+
+
 class Farm(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -24,6 +27,10 @@ class Farm(BaseModel):
     typical_yield_kg: float = Field(ge=0)
     harvest_window_start: date
     harvest_window_end: date
+    phone: str | None = None
+    preferred_language: str = "en"
+    notify_channel: NotifyChannel = "sms"
+    notify_opt_in: bool = False
 
 
 class DemandPoint(BaseModel):
@@ -45,6 +52,7 @@ class Truck(BaseModel):
     cost_per_km: float = Field(ge=0)
     availability_start: time
     availability_end: time
+    driver_phone: str | None = None
 
 
 # --- Agent outputs ---
@@ -197,3 +205,111 @@ class AdvisorResponse(BaseModel):
     sources: list[str] = Field(default_factory=list)
     run_id: str | None = None
     session_id: str | None = None
+
+
+# --- Breakdown assistance ---
+
+
+BreakdownReason = Literal[
+    "engine_failure",
+    "flat_tire",
+    "accident",
+    "fuel_empty",
+    "other",
+]
+
+BreakdownIncidentStatus = Literal["pending_approval", "approved", "failed"]
+
+
+class BreakdownReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    truck_id: str
+    reported_by: str = "fpo"
+    reason: BreakdownReason = "engine_failure"
+    completed_farm_ids: list[str] = Field(default_factory=list)
+    spare_truck_id: str | None = None
+
+
+class BreakdownIncident(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    incident_id: str
+    run_id: str
+    truck_id: str
+    reported_by: str
+    reason: BreakdownReason
+    status: BreakdownIncidentStatus
+    completed_farm_ids: list[str] = Field(default_factory=list)
+    pending_farm_ids: list[str] = Field(default_factory=list)
+    spare_truck_id: str | None = None
+    route_plan_before: dict[str, object] = Field(default_factory=dict)
+    route_plan_after: dict[str, object] = Field(default_factory=dict)
+    validation: ValidationResult | None = None
+    created_at: str | None = None
+    approved_at: str | None = None
+    notifications: dict[str, int] | None = None
+
+
+class ReplanPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    incident: BreakdownIncident
+    affected_farms: list[str] = Field(default_factory=list)
+    spare_truck_id: str | None = None
+    validation_valid: bool = True
+    validation_errors: list[str] = Field(default_factory=list)
+
+
+# --- Live truck GPS tracking ---
+
+
+TruckTrackingStatus = Literal["on_route", "deviating", "stale", "unknown"]
+DeviationAlertStatus = Literal["open", "resolved"]
+
+
+class PositionReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    reported_at: datetime | None = None
+    accuracy_m: float | None = Field(default=None, ge=0)
+    reported_by: str = "driver"
+
+
+class TruckPosition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    truck_id: str
+    lat: float
+    lng: float
+    reported_at: str
+    on_route: bool
+    deviation_km: float = Field(ge=0)
+    status: TruckTrackingStatus
+
+
+class RouteDeviationAlert(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    alert_id: str
+    run_id: str
+    truck_id: str
+    deviation_km: float
+    threshold_km: float
+    lat: float
+    lng: float
+    status: DeviationAlertStatus
+    notified_at: str | None = None
+    notifications: dict[str, int] | None = None
+    created_at: str | None = None
+
+
+class PositionIngestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    position: TruckPosition
+    alert_triggered: bool = False
+    alert: RouteDeviationAlert | None = None

@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from config import get_settings
 from routes.advisor import router as advisor_router
+from routes.breakdown import router as breakdown_router
 from routes.runs import router as runs_router
+from routes.tracking import router as tracking_router
 from routes.scenario import router as scenario_router
 from tools.db import (
     backfill_outcome_dims_from_csv,
@@ -40,7 +42,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))
-    await client.ping()
+    app.state.db_ready = True
+
+    app.state.redis_ready = False
+    try:
+        await client.ping()
+        app.state.redis_ready = True
+    except Exception as exc:
+        logger.warning("Redis ping failed at startup — cache/session features degraded: %s", exc)
 
     try:
         yield
@@ -62,6 +71,8 @@ app.add_middleware(
 # --- Routers ---
 app.include_router(scenario_router, prefix="/api")
 app.include_router(runs_router, prefix="/api")
+app.include_router(breakdown_router, prefix="/api")
+app.include_router(tracking_router, prefix="/api")
 app.include_router(advisor_router, prefix="/api")
 
 
@@ -77,4 +88,32 @@ async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSON
 
 @app.get("/health")
 async def health() -> dict[str, str]:
+    """Liveness probe — process is up."""
     return {"status": "ok"}
+
+
+@app.get("/health/ready")
+async def health_ready(request: Request) -> JSONResponse:
+    """Readiness probe — Postgres and Redis connectivity."""
+    checks: dict[str, str] = {}
+    ok = True
+
+    try:
+        engine: AsyncEngine = request.app.state.engine
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as exc:
+        checks["database"] = f"error: {exc}"
+        ok = False
+
+    try:
+        client = request.app.state.redis
+        await client.ping()
+        checks["redis"] = "ok"
+    except Exception as exc:
+        checks["redis"] = f"error: {exc}"
+        ok = False
+
+    body = {"status": "ok" if ok else "degraded", "checks": checks}
+    return JSONResponse(status_code=200 if ok else 503, content=body)
