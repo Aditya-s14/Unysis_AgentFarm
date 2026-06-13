@@ -439,8 +439,6 @@ async def run(state: AgentFarmState) -> AgentFarmState:
             objective_total += region_plan.objective_value
         notes_parts.append(f"{len(region_farms)}f/{len(region_dps)}dp→{len(region_plan.routes)}r")
 
-    await _attach_geometry(merged_routes)
-
     plan = RoutePlan(
         routes=merged_routes,
         objective_value=round(objective_total, 3) if objective_total else None,
@@ -455,6 +453,11 @@ async def run(state: AgentFarmState) -> AgentFarmState:
         trucks,
         at_risk_stock,
     )
+
+    # Attach geometry AFTER guaranteed-route injection so injected routes also
+    # get road-snapped polylines; previously they rendered as straight lines.
+    await _attach_geometry(plan.routes)
+
     state["route_plan"] = plan
 
     route_count = len(plan.routes)

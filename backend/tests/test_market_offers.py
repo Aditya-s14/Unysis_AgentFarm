@@ -114,9 +114,29 @@ def test_overlay_market_farm_to_dp():
     assert out["farm-001"] == "dp-priv-01"
 
 
-def test_ensure_guaranteed_routes_injects_when_missing():
-    farm = _tomato_farm()
-    dp = _private_dp("dp-priv-01")
+def test_ensure_guaranteed_routes_injects_when_feasible():
+    """A commitment within a legal day-trip gets a dedicated injected route."""
+    farm = _tomato_farm()  # Bengaluru (13.08, 77.54)
+    # Buyer near the farm so the direct trip is legal (well under the cap).
+    dp = DemandPoint(
+        id="dp-priv-09",
+        name="Nearby Direct Buyer",
+        lat=13.20,
+        lng=77.60,
+        type="private",
+        base_demand_per_day=1000.0,
+    )
+    commitments = [
+        MarketAcceptedCommitment(
+            offer_id="o-near",
+            farm_id="farm-001",
+            demand_point_id="dp-priv-09",
+            crop_type="tomato",
+            quantity_kg=800,
+            price_per_kg=22,
+            accepted_at=datetime.now(timezone.utc),
+        ),
+    ]
     trucks = [
         Truck(
             id="tr-001",
@@ -128,21 +148,43 @@ def test_ensure_guaranteed_routes_injects_when_missing():
     ]
     plan = RoutePlan(routes=[])
     injected, _warnings = ensure_guaranteed_routes(
-        plan,
-        _COMMITMENTS,
-        [farm],
-        [dp],
-        trucks,
-        [],
+        plan, commitments, [farm], [dp], trucks, [],
     )
     assert injected == 1
     assert len(plan.routes) == 1
     route = plan.routes[0]
     assert route.truck_id == "tr-001"
     farm_stops = [s for s in route.stops if s.label == "farm-001"]
-    dp_stops = [s for s in route.stops if s.demand_point_id == "dp-priv-01"]
+    dp_stops = [s for s in route.stops if s.demand_point_id == "dp-priv-09"]
     assert farm_stops and dp_stops
     assert farm_stops[0].sequence < dp_stops[0].sequence
+
+
+def test_ensure_guaranteed_routes_flags_far_commitment():
+    """A commitment beyond a legal one-truck day-trip is flagged, not injected.
+
+    Bengaluru farm -> Pune buyer (~700+ km) cannot be one truck in one legal
+    day; injecting such a route would present an illegal, undispatchable plan.
+    It must be skipped and surfaced as a warning for manual/multi-day handling.
+    """
+    farm = _tomato_farm()  # Bengaluru
+    dp = _private_dp("dp-priv-01")  # Pune (18.5, 73.8)
+    trucks = [
+        Truck(
+            id="tr-001",
+            capacity_kg=5000,
+            cost_per_km=18.0,
+            availability_start=time(4, 0),
+            availability_end=time(22, 0),
+        ),
+    ]
+    plan = RoutePlan(routes=[])
+    injected, warnings = ensure_guaranteed_routes(
+        plan, _COMMITMENTS, [farm], [dp], trucks, [],
+    )
+    assert injected == 0
+    assert len(plan.routes) == 0
+    assert any("legal day trip" in w for w in warnings)
 
 
 def test_ensure_guaranteed_routes_skips_when_satisfied():

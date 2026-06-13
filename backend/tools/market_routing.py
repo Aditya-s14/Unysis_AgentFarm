@@ -19,6 +19,11 @@ from models.schemas import (
 
 logger = logging.getLogger(__name__)
 
+# A single truck cannot legally cover more than ~14 h × 50 km/h in a day
+# (mirrors vrp_solver._MAX_ROUTE_KM). A direct farm→buyer commitment longer
+# than this needs a relay / multi-day handling, not a one-truck day trip.
+_MAX_GUARANTEED_KM = 700.0
+
 
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     r = 6371.0
@@ -100,28 +105,32 @@ def _pick_truck_for_guaranteed(
     route_plan: RoutePlan,
     quantity_kg: float,
 ) -> tuple[Truck | None, str | None]:
-    """Prefer unused trucks with capacity; fall back to largest truck with warning."""
+    """Pick an UNUSED truck for a dedicated guaranteed route.
+
+    A guaranteed pickup is a separate physical trip, so it must use a truck
+    not already assigned elsewhere — reusing an assigned truck would double-
+    book one vehicle onto two simultaneous routes. When every truck is
+    already committed we return None so the caller flags the commitment for
+    manual handling rather than fabricating an impossible route.
+    """
     if not trucks:
         return None, "no trucks available"
 
     used_ids = {r.truck_id for r in route_plan.routes}
-    load_by_truck: dict[str, float] = {}
-    for route in route_plan.routes:
-        load_by_truck[route.truck_id] = load_by_truck.get(route.truck_id, 0.0) + _route_load_kg(route)
-
-    def fits(truck: Truck) -> bool:
-        current = load_by_truck.get(truck.id, 0.0)
-        return current + quantity_kg <= truck.capacity_kg
-
     unused = [t for t in trucks if t.id not in used_ids]
-    for pool in (unused, trucks):
-        candidates = [t for t in pool if fits(t)]
-        if candidates:
-            return min(candidates, key=lambda t: t.capacity_kg), None
+    if not unused:
+        return None, (
+            "all trucks already assigned — cannot add a guaranteed pickup "
+            "without double-booking a vehicle"
+        )
 
-    biggest = max(trucks, key=lambda t: t.capacity_kg)
+    fitting = [t for t in unused if t.capacity_kg >= quantity_kg]
+    if fitting:
+        return min(fitting, key=lambda t: t.capacity_kg), None
+
+    biggest = max(unused, key=lambda t: t.capacity_kg)
     return biggest, (
-        f"over-capacity: truck {biggest.id} ({biggest.capacity_kg:.0f} kg) "
+        f"over-capacity: unused truck {biggest.id} ({biggest.capacity_kg:.0f} kg) "
         f"for committed {quantity_kg:.0f} kg"
     )
 
@@ -194,6 +203,22 @@ def ensure_guaranteed_routes(
         if dp is None:
             warnings.append(
                 f"missing demand point {commitment.demand_point_id!r} for guaranteed route",
+            )
+            continue
+
+        # A one-truck day trip can't legally cover an arbitrarily long direct
+        # haul. Flag such commitments for manual/multi-day handling instead of
+        # injecting an illegal route that looks dispatchable.
+        direct_km = _haversine_km(farm.lat, farm.lng, dp.lat, dp.lng)
+        if direct_km > _MAX_GUARANTEED_KM:
+            warnings.append(
+                f"guaranteed pickup farm={commitment.farm_id} dp={commitment.demand_point_id} "
+                f"is {direct_km:.0f} km (> {_MAX_GUARANTEED_KM:.0f} km legal day trip) — "
+                "needs relay/multi-day handling, not auto-routed"
+            )
+            logger.warning(
+                "ensure_guaranteed_routes: commitment farm=%s dp=%s exceeds legal day trip (%.0f km); skipping",
+                commitment.farm_id, commitment.demand_point_id, direct_km,
             )
             continue
 
