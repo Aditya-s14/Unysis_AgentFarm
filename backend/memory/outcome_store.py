@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 
 from models.db_models import PlanOutcomeRow, PlanTable
 from models.schemas import PlanOutcome
-from tools.db import get_session_maker
+from tools.db import DEFAULT_OUTCOME_SEASON, get_session_maker
 
 
 def _row_to_plan_outcome(row: PlanOutcomeRow) -> PlanOutcome:
@@ -27,6 +27,7 @@ def _row_to_plan_outcome(row: PlanOutcomeRow) -> PlanOutcome:
         crop_type=row.crop_type,
         day_of_week=row.day_of_week,
         road_segment=row.road_segment,
+        season=row.season,
     )
 
 
@@ -100,6 +101,7 @@ async def log_outcome(outcome: PlanOutcome) -> None:
             crop_type=outcome.crop_type,
             day_of_week=outcome.day_of_week,
             road_segment=outcome.road_segment,
+            season=outcome.season or DEFAULT_OUTCOME_SEASON,
         )
         session.add(row)
         await session.commit()

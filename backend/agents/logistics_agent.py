@@ -27,7 +27,8 @@ from datetime import datetime, timezone
 from config import get_settings
 from memory.outcome_store import get_route_history
 from memory.state import AgentFarmState, AgentTrace
-from models.schemas import Route, RoutePlan
+from models.schemas import BuyerDemandPost, MarketAcceptedCommitment, Route, RoutePlan
+from tools.market_routing import ensure_guaranteed_routes, order_dps_market_first
 from tools.maps_api import get_distance_matrix
 from models.schemas import WeatherEvent
 from tools.scenario_effects import (
@@ -169,10 +170,29 @@ def _merge_clusters_to_cap(clusters: list[list], max_clusters: int) -> list[list
     return clusters
 
 
+def _order_dps_buyer_first(
+    dps: list,
+    buyer_demands: list[BuyerDemandPost] | None,
+) -> list:
+    """Sort demand points: private with posts → private → apmc → retail."""
+    return order_dps_market_first(dps, buyer_demands, None)
+
+
+def _order_dps_market_first(
+    dps: list,
+    buyer_demands: list[BuyerDemandPost] | None,
+    market_commitments: list[MarketAcceptedCommitment] | None,
+) -> list:
+    """Sort demand points: market commitments → buyer posts → private → apmc → retail."""
+    return order_dps_market_first(dps, buyer_demands, market_commitments)
+
+
 def _geo_regions(
     farms: list,
     demand_points: list,
     num_trucks: int = 0,
+    buyer_demands: list[BuyerDemandPost] | None = None,
+    market_commitments: list[MarketAcceptedCommitment] | None = None,
 ) -> list[tuple[list, list]]:
     """Split wide-area fixtures into local clusters so VRP stays day-trip feasible.
 
@@ -192,7 +212,8 @@ def _geo_regions(
             d for d in demand_points
             if any(_straight_km(f.lat, f.lng, d.lat, d.lng) <= max_km for f in farms)
         ]
-        return [(farms, reachable or demand_points)]
+        ordered = _order_dps_market_first(reachable or demand_points, buyer_demands, market_commitments)
+        return [(farms, ordered)]
 
     clusters = _cluster_farms(farms, max_diameter_km=max_km)
     if num_trucks > 0 and len(clusters) > num_trucks:
@@ -221,9 +242,10 @@ def _geo_regions(
             key=lambda d: (d.lat - cen_lat) ** 2 + (d.lng - cen_lng) ** 2,
         )
         cap = max(2, min(len(nearest_dps), len(nearest_dps) // 2 + 1))
-        regions.append((cluster, nearest_dps[:cap]))
+        ordered = _order_dps_market_first(nearest_dps[:cap], buyer_demands, market_commitments)
+        regions.append((cluster, ordered))
 
-    return regions or [(farms, demand_points)]
+    return regions or [(farms, _order_dps_market_first(demand_points, buyer_demands, market_commitments))]
 
 
 async def _solve_region(
@@ -235,6 +257,8 @@ async def _solve_region(
     time_factor: float,
     scenario_type: str,
     event_by_farm: dict[str, WeatherEvent] | None = None,
+    buyer_demands: list[BuyerDemandPost] | None = None,
+    market_commitments: list[MarketAcceptedCommitment] | None = None,
 ) -> RoutePlan:
     dep_lat = sum(f.lat for f in region_farms) / len(region_farms)
     dep_lng = sum(f.lng for f in region_farms) / len(region_farms)
@@ -270,6 +294,8 @@ async def _solve_region(
         at_risk_stock,
         matrix,
         demand_scale=demand_scale,
+        buyer_demands=buyer_demands,
+        market_commitments=market_commitments,
     )
 
 
@@ -312,7 +338,15 @@ async def run(state: AgentFarmState) -> AgentFarmState:
     event_by_farm: dict[str, WeatherEvent] = {
         farm.id: event for farm, event in zip(farms, weather_events)
     }
-    regions = _geo_regions(farms, demand_points, num_trucks=len(trucks))
+    buyer_demands: list[BuyerDemandPost] = list(state.get("buyer_demands") or [])
+    market_commitments: list[MarketAcceptedCommitment] = list(
+        state.get("market_commitments") or [],
+    )
+    regions = _geo_regions(
+        farms, demand_points, num_trucks=len(trucks),
+        buyer_demands=buyer_demands,
+        market_commitments=market_commitments,
+    )
     truck_allocations = _allocate_trucks_by_demand(regions, trucks, at_risk_stock)
 
     fallback_last = trucks[-1:]
@@ -323,6 +357,8 @@ async def run(state: AgentFarmState) -> AgentFarmState:
             _solve_region(
                 region_farms, region_dps, rts, at_risk_stock,
                 demand_scale, time_factor, scenario_type, event_by_farm,
+                buyer_demands=buyer_demands,
+                market_commitments=market_commitments,
             )
         )
     region_plans = await asyncio.gather(*tasks)
@@ -341,6 +377,15 @@ async def run(state: AgentFarmState) -> AgentFarmState:
         objective_value=round(objective_total, 3) if objective_total else None,
         notes=f"multi_region ({', '.join(notes_parts)})",
     )
+
+    injected, inj_warnings = ensure_guaranteed_routes(
+        plan,
+        market_commitments,
+        farms,
+        demand_points,
+        trucks,
+        at_risk_stock,
+    )
     state["route_plan"] = plan
 
     route_count = len(plan.routes)
@@ -355,6 +400,10 @@ async def run(state: AgentFarmState) -> AgentFarmState:
         time_factor=round(time_factor, 3),
         relaxation_factor=demand_scale,
         retry_count=retry_count,
+        buyer_demands=buyer_demands,
+        market_commitments=market_commitments,
+        guaranteed_pickup_injected=injected,
+        guaranteed_warnings=inj_warnings,
     )
 
     logger.info(
@@ -388,6 +437,10 @@ def _append_trace(
     time_factor: float,
     relaxation_factor: float,
     retry_count: int,
+    buyer_demands: list[BuyerDemandPost] | None = None,
+    market_commitments: list[MarketAcceptedCommitment] | None = None,
+    guaranteed_pickup_injected: int = 0,
+    guaranteed_warnings: list[str] | None = None,
 ) -> None:
     prior = state.get("agent_traces") or []
     prev_validator = _last_validator_trace(prior)
@@ -413,6 +466,22 @@ def _append_trace(
         f"demand_scale={relaxation_factor}",
         f"attempt={attempt_number}",
     ]
+    posts = buyer_demands or []
+    if posts:
+        private_post_ids = {p.demand_point_id for p in posts}
+        apmc_count = sum(
+            1 for dp in (state.get("demand_points") or []) if dp.type == "apmc"
+        )
+        note_parts.append("buyer_first_order=true")
+        note_parts.append(f"private_posts={len(private_post_ids)}")
+        note_parts.append(f"apmc_dps={apmc_count}")
+    commitments = market_commitments or []
+    if commitments:
+        note_parts.append(f"market_commitments={len(commitments)}")
+    if guaranteed_pickup_injected:
+        note_parts.append(f"guaranteed_pickup_injected={guaranteed_pickup_injected}")
+    for warn in guaranteed_warnings or []:
+        note_parts.append(f"guaranteed_warn={warn}")
     if is_retry_run:
         note_parts.append(f"retry_after_validation_fail retry_count={retry_count}")
 

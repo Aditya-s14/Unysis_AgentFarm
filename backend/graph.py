@@ -61,7 +61,7 @@ from agents import (
 from agents.metrics import compute_kpi_delta
 from agents.review_flags import max_retries, needs_human_review
 from memory.state import AgentFarmState, AgentTrace, initial_agent_farm_state
-from models.schemas import DemandPoint, Farm, Plan, RoutePlan, Truck, ValidationResult
+from models.schemas import DemandPoint, Farm, FarmerCommitment, BuyerDemandPost, MarketAcceptedCommitment, Plan, RoutePlan, Truck, ValidationResult
 
 logger = logging.getLogger(__name__)
 
@@ -292,6 +292,9 @@ class PipelineRequest:
     trucks: list[Truck]
     scenario_type: str = "default"
     run_id: str | None = None
+    farmer_commitments: list[FarmerCommitment] = field(default_factory=list)
+    buyer_demands: list[BuyerDemandPost] = field(default_factory=list)
+    market_commitments: list[MarketAcceptedCommitment] = field(default_factory=list)
 
 
 @dataclass
@@ -308,6 +311,7 @@ class PipelineResult:
     weather_summary: dict = field(default_factory=dict)
     weather_risk_summary: dict[str, str] = field(default_factory=dict)
     weather_snapshot: dict = field(default_factory=dict)
+    calendar_alert: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -328,6 +332,26 @@ async def run_scenario(request: PipelineRequest) -> PipelineResult:
     state["farms"] = request.farms
     state["demand_points"] = request.demand_points
     state["trucks"] = request.trucks
+    if request.farmer_commitments:
+        state["farmer_commitments"] = request.farmer_commitments
+    if request.buyer_demands:
+        state["buyer_demands"] = request.buyer_demands
+    if request.market_commitments:
+        state["market_commitments"] = request.market_commitments
+        existing_fc = list(state.get("farmer_commitments") or [])
+        seen_farms = {fc.farm_id for fc in existing_fc}
+        for mc in request.market_commitments:
+            if mc.farm_id in seen_farms:
+                continue
+            existing_fc.append(
+                FarmerCommitment(
+                    farm_id=mc.farm_id,
+                    tonnage_kg=mc.quantity_kg,
+                    demand_point_id=mc.demand_point_id,
+                ),
+            )
+            seen_farms.add(mc.farm_id)
+        state["farmer_commitments"] = existing_fc
 
     logger.info("run_scenario start run_id=%s scenario=%s", run_id, request.scenario_type)
     result: AgentFarmState = await compiled_graph.ainvoke(state)
@@ -380,4 +404,5 @@ async def run_scenario(request: PipelineRequest) -> PipelineResult:
         weather_summary=w_summary,
         weather_risk_summary=weather_risk,
         weather_snapshot=w_snapshot,
+        calendar_alert=result.get("calendar_alert"),
     )

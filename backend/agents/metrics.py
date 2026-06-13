@@ -48,7 +48,8 @@ import math
 from collections import defaultdict
 
 from memory.state import AgentFarmState
-from models.schemas import AtRiskStock, DemandPoint, Farm
+from models.schemas import AtRiskStock, DemandPoint, Farm, MarketAcceptedCommitment
+from tools.market_routing import overlay_market_farm_to_dp
 from models.schemas import WeatherEvent
 from tools.scenario_effects import (
     HEAT,
@@ -172,7 +173,10 @@ def _routed_farm_to_dp(
                 if nearest:
                     mapping[farm_id] = nearest
 
-    return mapping
+    market_commitments: list[MarketAcceptedCommitment] = list(
+        state.get("market_commitments") or [],
+    )
+    return overlay_market_farm_to_dp(mapping, market_commitments)
 
 
 def _demand_matching_waste(

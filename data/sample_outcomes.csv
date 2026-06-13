@@ -1,41 +1,121 @@
-plan_external_key,waste_kg_predicted,waste_kg_actual,delivery_time_predicted_h,delivery_time_actual_h,demand_predicted,demand_actual,mandi_id,weekday,crop_type,road_segment,notes,outcome_index
-OUT-2024-001,80,75.0,4.0,4.1,4800,4000,dp-apmc-01,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,1
-OUT-2024-002,83,77.5,4.05,4.15,4980,4150,dp-apmc-02,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,2
-OUT-2024-003,86,80.0,4.1,4.2,5160,4300,dp-apmc-03,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,3
-OUT-2024-004,89,82.5,4.15,4.25,5340,4450,dp-apmc-04,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,4
-OUT-2024-005,92,85.0,4.2,4.3,5520,4600,dp-apmc-05,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,5
-OUT-2024-006,95,87.5,4.25,4.35,5700,4750,dp-apmc-06,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,6
-OUT-2024-007,98,90.0,4.3,4.4,5880,4900,dp-apmc-01,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,7
-OUT-2024-008,101,92.5,4.35,4.45,6060,5050,dp-apmc-02,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,8
-OUT-2024-009,104,95.0,4.4,4.5,6240,5200,dp-apmc-03,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,9
-OUT-2024-010,107,97.5,4.45,4.55,6420,5350,dp-apmc-04,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,10
-OUT-2024-011,110,100.0,4.5,4.6,6600,5500,dp-apmc-05,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,11
-OUT-2024-012,113,102.5,4.55,4.65,6780,5650,dp-apmc-06,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,12
-OUT-2024-013,95,102,5.0,7.0,5100,5050,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,13
-OUT-2024-014,99,106,5.12,7.17,5140,5085,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,14
-OUT-2024-015,103,110,5.24,7.34,5180,5120,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,15
-OUT-2024-016,107,114,5.36,7.5,5220,5155,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,16
-OUT-2024-017,111,118,5.48,7.67,5260,5190,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,17
-OUT-2024-018,115,122,5.6,7.84,5300,5225,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,18
-OUT-2024-019,119,126,5.72,8.01,5340,5260,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,19
-OUT-2024-020,123,130,5.84,8.18,5380,5295,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,20
-OUT-2024-021,127,134,5.96,8.34,5420,5330,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,21
-OUT-2024-022,131,138,6.08,8.51,5460,5365,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,22
-OUT-2024-023,70.0,68.0,3.8,3.8,3200,3104,dp-priv-01,Monday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,23
-OUT-2024-024,72.2,70.0,4.15,4.25,3255,3157,dp-priv-02,Thursday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,24
-OUT-2024-025,74.4,72.0,4.5,4.7,3310,3210,dp-priv-03,Friday,banana,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,25
-OUT-2024-026,76.6,74.0,4.85,4.85,3365,3264,dp-priv-01,Saturday,mango,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,26
-OUT-2024-027,78.8,76.0,5.2,5.3,3420,3317,dp-priv-02,Sunday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,27
-OUT-2024-028,81.0,78.0,3.8,4.0,3475,3370,dp-priv-03,Monday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,28
-OUT-2024-029,83.2,80.0,4.15,4.15,3530,3424,dp-priv-01,Thursday,banana,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,29
-OUT-2024-030,85.4,82.0,4.5,4.6,3585,3477,dp-priv-02,Friday,mango,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,30
-OUT-2024-031,87.6,84.0,4.85,5.05,3640,3530,dp-priv-03,Saturday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,31
-OUT-2024-032,89.8,86.0,5.2,5.2,3695,3584,dp-priv-01,Sunday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,32
-OUT-2024-033,92.0,88.0,3.8,3.9,3750,3637,dp-priv-02,Monday,banana,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,33
-OUT-2024-034,94.2,90.0,4.15,4.35,3805,3690,dp-priv-03,Thursday,mango,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,34
-OUT-2024-035,96.4,92.0,4.5,4.5,3860,3744,dp-priv-01,Friday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,35
-OUT-2024-036,98.6,94.0,4.85,4.95,3915,3797,dp-priv-02,Saturday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,36
-OUT-2024-037,100.8,96.0,5.2,5.4,3970,3850,dp-priv-03,Sunday,banana,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,37
-OUT-2024-038,103.0,98.0,3.8,3.8,4025,3904,dp-priv-01,Monday,mango,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,38
-OUT-2024-039,105.2,100.0,4.15,4.25,4080,3957,dp-priv-02,Thursday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,39
-OUT-2024-040,107.4,102.0,4.5,4.7,4135,4010,dp-priv-03,Friday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,40
+plan_external_key,waste_kg_predicted,waste_kg_actual,delivery_time_predicted_h,delivery_time_actual_h,demand_predicted,demand_actual,mandi_id,weekday,crop_type,road_segment,notes,outcome_index,season
+OUT-2024-001,80.0,75.0,4.0,4.1,4800.0,4000.0,dp-apmc-01,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,1,Kharif 2024
+OUT-2024-002,83.0,77.5,4.05,4.15,4980.0,4150.0,dp-apmc-02,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,2,Kharif 2024
+OUT-2024-003,86.0,80.0,4.1,4.2,5160.0,4300.0,dp-apmc-03,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,3,Kharif 2024
+OUT-2024-004,89.0,82.5,4.15,4.25,5340.0,4450.0,dp-apmc-04,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,4,Kharif 2024
+OUT-2024-005,92.0,85.0,4.2,4.3,5520.0,4600.0,dp-apmc-05,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,5,Kharif 2024
+OUT-2024-006,95.0,87.5,4.25,4.35,5700.0,4750.0,dp-apmc-06,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,6,Kharif 2024
+OUT-2024-007,98.0,90.0,4.3,4.4,5880.0,4900.0,dp-apmc-01,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,7,Kharif 2024
+OUT-2024-008,101.0,92.5,4.35,4.45,6060.0,5050.0,dp-apmc-02,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,8,Kharif 2024
+OUT-2024-009,104.0,95.0,4.4,4.5,6240.0,5200.0,dp-apmc-03,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,9,Kharif 2024
+OUT-2024-010,107.0,97.5,4.45,4.55,6420.0,5350.0,dp-apmc-04,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,10,Kharif 2024
+OUT-2024-011,110.0,100.0,4.5,4.6,6600.0,5500.0,dp-apmc-05,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,11,Kharif 2024
+OUT-2024-012,113.0,102.5,4.55,4.65,6780.0,5650.0,dp-apmc-06,Tuesday,tomato,,Historical bundle: mandi demand models ran ~20pct high vs realized lift on Tuesday auctions,12,Kharif 2024
+OUT-2024-013,95.0,102.0,5.0,7.0,5100.0,5050.0,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,13,Kharif 2024
+OUT-2024-014,99.0,106.0,5.12,7.17,5140.0,5085.0,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,14,Kharif 2024
+OUT-2024-015,103.0,110.0,5.24,7.34,5180.0,5120.0,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,15,Kharif 2024
+OUT-2024-016,107.0,114.0,5.36,7.5,5220.0,5155.0,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,16,Kharif 2024
+OUT-2024-017,111.0,118.0,5.48,7.67,5260.0,5190.0,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,17,Kharif 2024
+OUT-2024-018,115.0,122.0,5.6,7.84,5300.0,5225.0,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,18,Kharif 2024
+OUT-2024-019,119.0,126.0,5.72,8.01,5340.0,5260.0,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,19,Kharif 2024
+OUT-2024-020,123.0,130.0,5.84,8.18,5380.0,5295.0,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,20,Kharif 2024
+OUT-2024-021,127.0,134.0,5.96,8.34,5420.0,5330.0,dp-apmc-04,Wednesday,onion,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,21,Kharif 2024
+OUT-2024-022,131.0,138.0,6.08,8.51,5460.0,5365.0,dp-apmc-05,Wednesday,tomato,NH-48,Monsoon season NH-48 Nashik-Pune leg observed ~40pct travel time inflation vs dry routing plan,22,Kharif 2024
+OUT-2024-023,70.0,68.0,3.8,3.8,3200.0,3104.0,dp-priv-01,Monday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,23,Kharif 2024
+OUT-2024-024,72.2,70.0,4.15,4.25,3255.0,3157.0,dp-priv-02,Thursday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,24,Kharif 2024
+OUT-2024-025,74.4,72.0,4.5,4.7,3310.0,3210.0,dp-priv-03,Friday,banana,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,25,Kharif 2024
+OUT-2024-026,76.6,74.0,4.85,4.85,3365.0,3264.0,dp-priv-01,Saturday,mango,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,26,Kharif 2024
+OUT-2024-027,78.8,76.0,5.2,5.3,3420.0,3317.0,dp-priv-02,Sunday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,27,Kharif 2024
+OUT-2024-028,81.0,78.0,3.8,4.0,3475.0,3370.0,dp-priv-03,Monday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,28,Kharif 2024
+OUT-2024-029,83.2,80.0,4.15,4.15,3530.0,3424.0,dp-priv-01,Thursday,banana,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,29,Kharif 2024
+OUT-2024-030,85.4,82.0,4.5,4.6,3585.0,3477.0,dp-priv-02,Friday,mango,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,30,Kharif 2024
+OUT-2024-031,87.6,84.0,4.85,5.05,3640.0,3530.0,dp-priv-03,Saturday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,31,Kharif 2024
+OUT-2024-032,89.8,86.0,5.2,5.2,3695.0,3584.0,dp-priv-01,Sunday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,32,Kharif 2024
+OUT-2024-033,92.0,88.0,3.8,3.9,3750.0,3637.0,dp-priv-02,Monday,banana,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,33,Kharif 2024
+OUT-2024-034,94.2,90.0,4.15,4.35,3805.0,3690.0,dp-priv-03,Thursday,mango,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,34,Kharif 2024
+OUT-2024-035,96.4,92.0,4.5,4.5,3860.0,3744.0,dp-priv-01,Friday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,35,Kharif 2024
+OUT-2024-036,98.6,94.0,4.85,4.95,3915.0,3797.0,dp-priv-02,Saturday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,36,Kharif 2024
+OUT-2024-037,100.8,96.0,5.2,5.4,3970.0,3850.0,dp-priv-03,Sunday,banana,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,37,Kharif 2024
+OUT-2024-038,103.0,98.0,3.8,3.8,4025.0,3904.0,dp-priv-01,Monday,mango,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,38,Kharif 2024
+OUT-2024-039,105.2,100.0,4.15,4.25,4080.0,3957.0,dp-priv-02,Thursday,tomato,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,39,Kharif 2024
+OUT-2024-040,107.4,102.0,4.5,4.7,4135.0,4010.0,dp-priv-03,Friday,onion,,Baseline calibration run; no Tuesday APMC or NH-48 monsoon flag,40,Kharif 2024
+OUT-2025-001,80.0,72.2,4.0,4.05,4800.0,4336.0,dp-apmc-01,Tuesday,tomato,,Rabi 2025: demand bias correction improving Tuesday APMC forecasts,1,Rabi 2025
+OUT-2025-002,83.0,74.5,4.05,4.11,4980.0,4499.0,dp-apmc-02,Tuesday,tomato,,Rabi 2025: demand bias correction improving Tuesday APMC forecasts,2,Rabi 2025
+OUT-2025-003,86.0,76.7,4.1,4.16,5160.0,4661.0,dp-apmc-03,Tuesday,tomato,,Rabi 2025: demand bias correction improving Tuesday APMC forecasts,3,Rabi 2025
+OUT-2025-004,89.0,78.9,4.15,4.21,5340.0,4824.0,dp-apmc-04,Tuesday,tomato,,Rabi 2025: demand bias correction improving Tuesday APMC forecasts,4,Rabi 2025
+OUT-2025-005,92.0,81.2,4.2,4.25,5520.0,4986.0,dp-apmc-05,Tuesday,tomato,,Rabi 2025: demand bias correction improving Tuesday APMC forecasts,5,Rabi 2025
+OUT-2025-006,95.0,83.4,4.25,4.3,5700.0,5149.0,dp-apmc-06,Tuesday,tomato,,Rabi 2025: demand bias correction improving Tuesday APMC forecasts,6,Rabi 2025
+OUT-2025-007,98.0,85.6,4.3,4.36,5880.0,5312.0,dp-apmc-01,Tuesday,tomato,,Rabi 2025: demand bias correction improving Tuesday APMC forecasts,7,Rabi 2025
+OUT-2025-008,101.0,87.8,4.35,4.41,6060.0,5474.0,dp-apmc-02,Tuesday,tomato,,Rabi 2025: demand bias correction improving Tuesday APMC forecasts,8,Rabi 2025
+OUT-2025-009,104.0,90.0,4.4,4.46,6240.0,5637.0,dp-apmc-03,Tuesday,tomato,,Rabi 2025: demand bias correction improving Tuesday APMC forecasts,9,Rabi 2025
+OUT-2025-010,107.0,92.3,4.45,4.5,6420.0,5799.0,dp-apmc-04,Tuesday,tomato,,Rabi 2025: demand bias correction improving Tuesday APMC forecasts,10,Rabi 2025
+OUT-2025-011,110.0,94.5,4.5,4.55,6600.0,5962.0,dp-apmc-05,Tuesday,tomato,,Rabi 2025: demand bias correction improving Tuesday APMC forecasts,11,Rabi 2025
+OUT-2025-012,113.0,96.7,4.55,4.61,6780.0,6125.0,dp-apmc-06,Tuesday,tomato,,Rabi 2025: demand bias correction improving Tuesday APMC forecasts,12,Rabi 2025
+OUT-2025-013,95.0,95.0,5.0,6.0,5100.0,4998.0,dp-apmc-04,Wednesday,onion,NH-48,Rabi 2025: NH-48 travel time bias correction ~20pct slippage vs plan,13,Rabi 2025
+OUT-2025-014,99.0,99.0,5.12,6.14,5140.0,5037.0,dp-apmc-05,Wednesday,tomato,NH-48,Rabi 2025: NH-48 travel time bias correction ~20pct slippage vs plan,14,Rabi 2025
+OUT-2025-015,103.0,103.0,5.24,6.29,5180.0,5076.0,dp-apmc-04,Wednesday,onion,NH-48,Rabi 2025: NH-48 travel time bias correction ~20pct slippage vs plan,15,Rabi 2025
+OUT-2025-016,107.0,107.0,5.36,6.43,5220.0,5116.0,dp-apmc-05,Wednesday,tomato,NH-48,Rabi 2025: NH-48 travel time bias correction ~20pct slippage vs plan,16,Rabi 2025
+OUT-2025-017,111.0,111.0,5.48,6.58,5260.0,5155.0,dp-apmc-04,Wednesday,onion,NH-48,Rabi 2025: NH-48 travel time bias correction ~20pct slippage vs plan,17,Rabi 2025
+OUT-2025-018,115.0,115.0,5.6,6.72,5300.0,5194.0,dp-apmc-05,Wednesday,tomato,NH-48,Rabi 2025: NH-48 travel time bias correction ~20pct slippage vs plan,18,Rabi 2025
+OUT-2025-019,119.0,119.0,5.72,6.86,5340.0,5233.0,dp-apmc-04,Wednesday,onion,NH-48,Rabi 2025: NH-48 travel time bias correction ~20pct slippage vs plan,19,Rabi 2025
+OUT-2025-020,123.0,123.0,5.84,7.01,5380.0,5272.0,dp-apmc-05,Wednesday,tomato,NH-48,Rabi 2025: NH-48 travel time bias correction ~20pct slippage vs plan,20,Rabi 2025
+OUT-2025-021,127.0,127.0,5.96,7.15,5420.0,5312.0,dp-apmc-04,Wednesday,onion,NH-48,Rabi 2025: NH-48 travel time bias correction ~20pct slippage vs plan,21,Rabi 2025
+OUT-2025-022,131.0,131.0,6.08,7.3,5460.0,5351.0,dp-apmc-05,Wednesday,tomato,NH-48,Rabi 2025: NH-48 travel time bias correction ~20pct slippage vs plan,22,Rabi 2025
+OUT-2025-023,70.0,66.9,3.8,3.8,3200.0,3136.0,dp-priv-01,Monday,tomato,,Rabi 2025 baseline calibration with partial Tier-2 correction,23,Rabi 2025
+OUT-2025-024,72.2,68.8,4.15,4.21,3255.0,3190.0,dp-priv-02,Thursday,onion,,Rabi 2025 baseline calibration with partial Tier-2 correction,24,Rabi 2025
+OUT-2025-025,74.4,70.7,4.5,4.61,3310.0,3244.0,dp-priv-03,Friday,banana,,Rabi 2025 baseline calibration with partial Tier-2 correction,25,Rabi 2025
+OUT-2025-026,76.6,72.6,4.85,4.85,3365.0,3298.0,dp-priv-01,Saturday,mango,,Rabi 2025 baseline calibration with partial Tier-2 correction,26,Rabi 2025
+OUT-2025-027,78.8,74.5,5.2,5.25,3420.0,3352.0,dp-priv-02,Sunday,tomato,,Rabi 2025 baseline calibration with partial Tier-2 correction,27,Rabi 2025
+OUT-2025-028,81.0,76.3,3.8,3.91,3475.0,3406.0,dp-priv-03,Monday,onion,,Rabi 2025 baseline calibration with partial Tier-2 correction,28,Rabi 2025
+OUT-2025-029,83.2,78.2,4.15,4.15,3530.0,3459.0,dp-priv-01,Thursday,banana,,Rabi 2025 baseline calibration with partial Tier-2 correction,29,Rabi 2025
+OUT-2025-030,85.4,80.1,4.5,4.55,3585.0,3513.0,dp-priv-02,Friday,mango,,Rabi 2025 baseline calibration with partial Tier-2 correction,30,Rabi 2025
+OUT-2025-031,87.6,82.0,4.85,4.96,3640.0,3567.0,dp-priv-03,Saturday,tomato,,Rabi 2025 baseline calibration with partial Tier-2 correction,31,Rabi 2025
+OUT-2025-032,89.8,83.9,5.2,5.2,3695.0,3621.0,dp-priv-01,Sunday,onion,,Rabi 2025 baseline calibration with partial Tier-2 correction,32,Rabi 2025
+OUT-2025-033,92.0,85.8,3.8,3.85,3750.0,3675.0,dp-priv-02,Monday,banana,,Rabi 2025 baseline calibration with partial Tier-2 correction,33,Rabi 2025
+OUT-2025-034,94.2,87.7,4.15,4.26,3805.0,3729.0,dp-priv-03,Thursday,mango,,Rabi 2025 baseline calibration with partial Tier-2 correction,34,Rabi 2025
+OUT-2025-035,96.4,89.6,4.5,4.5,3860.0,3783.0,dp-priv-01,Friday,tomato,,Rabi 2025 baseline calibration with partial Tier-2 correction,35,Rabi 2025
+OUT-2025-036,98.6,91.5,4.85,4.91,3915.0,3837.0,dp-priv-02,Saturday,onion,,Rabi 2025 baseline calibration with partial Tier-2 correction,36,Rabi 2025
+OUT-2025-037,100.8,93.4,5.2,5.31,3970.0,3891.0,dp-priv-03,Sunday,banana,,Rabi 2025 baseline calibration with partial Tier-2 correction,37,Rabi 2025
+OUT-2025-038,103.0,95.2,3.8,3.8,4025.0,3944.0,dp-priv-01,Monday,mango,,Rabi 2025 baseline calibration with partial Tier-2 correction,38,Rabi 2025
+OUT-2025-039,105.2,97.1,4.15,4.21,4080.0,3998.0,dp-priv-02,Thursday,tomato,,Rabi 2025 baseline calibration with partial Tier-2 correction,39,Rabi 2025
+OUT-2025-040,107.4,99.0,4.5,4.61,4135.0,4052.0,dp-priv-03,Friday,onion,,Rabi 2025 baseline calibration with partial Tier-2 correction,40,Rabi 2025
+OUT-2026-001,80.0,68.2,4.0,4.02,4800.0,4576.0,dp-apmc-01,Tuesday,tomato,,Summer 2026: full demand bias correction on Tuesday APMC forecasts,1,Summer 2026
+OUT-2026-002,83.0,70.1,4.05,4.07,4980.0,4748.0,dp-apmc-02,Tuesday,tomato,,Summer 2026: full demand bias correction on Tuesday APMC forecasts,2,Summer 2026
+OUT-2026-003,86.0,71.9,4.1,4.12,5160.0,4919.0,dp-apmc-03,Tuesday,tomato,,Summer 2026: full demand bias correction on Tuesday APMC forecasts,3,Summer 2026
+OUT-2026-004,89.0,73.7,4.15,4.17,5340.0,5091.0,dp-apmc-04,Tuesday,tomato,,Summer 2026: full demand bias correction on Tuesday APMC forecasts,4,Summer 2026
+OUT-2026-005,92.0,75.5,4.2,4.22,5520.0,5262.0,dp-apmc-05,Tuesday,tomato,,Summer 2026: full demand bias correction on Tuesday APMC forecasts,5,Summer 2026
+OUT-2026-006,95.0,77.4,4.25,4.27,5700.0,5434.0,dp-apmc-06,Tuesday,tomato,,Summer 2026: full demand bias correction on Tuesday APMC forecasts,6,Summer 2026
+OUT-2026-007,98.0,79.2,4.3,4.32,5880.0,5606.0,dp-apmc-01,Tuesday,tomato,,Summer 2026: full demand bias correction on Tuesday APMC forecasts,7,Summer 2026
+OUT-2026-008,101.0,81.0,4.35,4.37,6060.0,5777.0,dp-apmc-02,Tuesday,tomato,,Summer 2026: full demand bias correction on Tuesday APMC forecasts,8,Summer 2026
+OUT-2026-009,104.0,82.8,4.4,4.42,6240.0,5949.0,dp-apmc-03,Tuesday,tomato,,Summer 2026: full demand bias correction on Tuesday APMC forecasts,9,Summer 2026
+OUT-2026-010,107.0,84.7,4.45,4.47,6420.0,6120.0,dp-apmc-04,Tuesday,tomato,,Summer 2026: full demand bias correction on Tuesday APMC forecasts,10,Summer 2026
+OUT-2026-011,110.0,86.5,4.5,4.52,6600.0,6292.0,dp-apmc-05,Tuesday,tomato,,Summer 2026: full demand bias correction on Tuesday APMC forecasts,11,Summer 2026
+OUT-2026-012,113.0,88.3,4.55,4.57,6780.0,6464.0,dp-apmc-06,Tuesday,tomato,,Summer 2026: full demand bias correction on Tuesday APMC forecasts,12,Summer 2026
+OUT-2026-013,95.0,95.0,5.0,5.4,5100.0,5074.0,dp-apmc-04,Wednesday,onion,NH-48,Summer 2026: NH-48 full route bias correction ~8pct slippage vs plan,13,Summer 2026
+OUT-2026-014,99.0,99.0,5.12,5.53,5140.0,5114.0,dp-apmc-05,Wednesday,tomato,NH-48,Summer 2026: NH-48 full route bias correction ~8pct slippage vs plan,14,Summer 2026
+OUT-2026-015,103.0,103.0,5.24,5.66,5180.0,5154.0,dp-apmc-04,Wednesday,onion,NH-48,Summer 2026: NH-48 full route bias correction ~8pct slippage vs plan,15,Summer 2026
+OUT-2026-016,107.0,107.0,5.36,5.79,5220.0,5194.0,dp-apmc-05,Wednesday,tomato,NH-48,Summer 2026: NH-48 full route bias correction ~8pct slippage vs plan,16,Summer 2026
+OUT-2026-017,111.0,111.0,5.48,5.92,5260.0,5234.0,dp-apmc-04,Wednesday,onion,NH-48,Summer 2026: NH-48 full route bias correction ~8pct slippage vs plan,17,Summer 2026
+OUT-2026-018,115.0,115.0,5.6,6.05,5300.0,5274.0,dp-apmc-05,Wednesday,tomato,NH-48,Summer 2026: NH-48 full route bias correction ~8pct slippage vs plan,18,Summer 2026
+OUT-2026-019,119.0,119.0,5.72,6.18,5340.0,5313.0,dp-apmc-04,Wednesday,onion,NH-48,Summer 2026: NH-48 full route bias correction ~8pct slippage vs plan,19,Summer 2026
+OUT-2026-020,123.0,123.0,5.84,6.31,5380.0,5353.0,dp-apmc-05,Wednesday,tomato,NH-48,Summer 2026: NH-48 full route bias correction ~8pct slippage vs plan,20,Summer 2026
+OUT-2026-021,127.0,127.0,5.96,6.44,5420.0,5393.0,dp-apmc-04,Wednesday,onion,NH-48,Summer 2026: NH-48 full route bias correction ~8pct slippage vs plan,21,Summer 2026
+OUT-2026-022,131.0,131.0,6.08,6.57,5460.0,5433.0,dp-apmc-05,Wednesday,tomato,NH-48,Summer 2026: NH-48 full route bias correction ~8pct slippage vs plan,22,Summer 2026
+OUT-2026-023,70.0,65.3,3.8,3.8,3200.0,3184.0,dp-priv-01,Monday,tomato,,Summer 2026 baseline calibration with full Tier-2 correction,23,Summer 2026
+OUT-2026-024,72.2,67.0,4.15,4.17,3255.0,3239.0,dp-priv-02,Thursday,onion,,Summer 2026 baseline calibration with full Tier-2 correction,24,Summer 2026
+OUT-2026-025,74.4,68.8,4.5,4.54,3310.0,3293.0,dp-priv-03,Friday,banana,,Summer 2026 baseline calibration with full Tier-2 correction,25,Summer 2026
+OUT-2026-026,76.6,70.5,4.85,4.85,3365.0,3348.0,dp-priv-01,Saturday,mango,,Summer 2026 baseline calibration with full Tier-2 correction,26,Summer 2026
+OUT-2026-027,78.8,72.2,5.2,5.22,3420.0,3403.0,dp-priv-02,Sunday,tomato,,Summer 2026 baseline calibration with full Tier-2 correction,27,Summer 2026
+OUT-2026-028,81.0,74.0,3.8,3.84,3475.0,3458.0,dp-priv-03,Monday,onion,,Summer 2026 baseline calibration with full Tier-2 correction,28,Summer 2026
+OUT-2026-029,83.2,75.7,4.15,4.15,3530.0,3512.0,dp-priv-01,Thursday,banana,,Summer 2026 baseline calibration with full Tier-2 correction,29,Summer 2026
+OUT-2026-030,85.4,77.4,4.5,4.52,3585.0,3567.0,dp-priv-02,Friday,mango,,Summer 2026 baseline calibration with full Tier-2 correction,30,Summer 2026
+OUT-2026-031,87.6,79.1,4.85,4.89,3640.0,3622.0,dp-priv-03,Saturday,tomato,,Summer 2026 baseline calibration with full Tier-2 correction,31,Summer 2026
+OUT-2026-032,89.8,80.9,5.2,5.2,3695.0,3677.0,dp-priv-01,Sunday,onion,,Summer 2026 baseline calibration with full Tier-2 correction,32,Summer 2026
+OUT-2026-033,92.0,82.6,3.8,3.82,3750.0,3731.0,dp-priv-02,Monday,banana,,Summer 2026 baseline calibration with full Tier-2 correction,33,Summer 2026
+OUT-2026-034,94.2,84.3,4.15,4.19,3805.0,3786.0,dp-priv-03,Thursday,mango,,Summer 2026 baseline calibration with full Tier-2 correction,34,Summer 2026
+OUT-2026-035,96.4,86.1,4.5,4.5,3860.0,3841.0,dp-priv-01,Friday,tomato,,Summer 2026 baseline calibration with full Tier-2 correction,35,Summer 2026
+OUT-2026-036,98.6,87.8,4.85,4.87,3915.0,3895.0,dp-priv-02,Saturday,onion,,Summer 2026 baseline calibration with full Tier-2 correction,36,Summer 2026
+OUT-2026-037,100.8,89.5,5.2,5.24,3970.0,3950.0,dp-priv-03,Sunday,banana,,Summer 2026 baseline calibration with full Tier-2 correction,37,Summer 2026
+OUT-2026-038,103.0,91.2,3.8,3.8,4025.0,4005.0,dp-priv-01,Monday,mango,,Summer 2026 baseline calibration with full Tier-2 correction,38,Summer 2026
+OUT-2026-039,105.2,93.0,4.15,4.17,4080.0,4060.0,dp-priv-02,Thursday,tomato,,Summer 2026 baseline calibration with full Tier-2 correction,39,Summer 2026
+OUT-2026-040,107.4,94.7,4.5,4.54,4135.0,4114.0,dp-priv-03,Friday,onion,,Summer 2026 baseline calibration with full Tier-2 correction,40,Summer 2026

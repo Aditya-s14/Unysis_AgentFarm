@@ -39,26 +39,26 @@ function withTruckContacts(truck) {
 // ── 20 Farms ──────────────────────────────────────────────────────────────
 const _RAW_FARMS = [
   // Karnataka — Tomatoes
-  { id: 'farm-001', name: 'Nandi Valley Tomatoes',          lat: 13.0827, lng: 77.5439, crop_type: 'tomato', acreage:  8.4, typical_yield_kg: 1200, harvest_window_start: '2026-03-15', harvest_window_end: '2026-05-30' },
-  { id: 'farm-002', name: 'Tumkur Organic Tomato Coop',     lat: 13.3409, lng: 77.1011, crop_type: 'tomato', acreage: 11.2, typical_yield_kg: 1800, harvest_window_start: '2026-03-10', harvest_window_end: '2026-06-01' },
-  { id: 'farm-003', name: 'Raichur Table Tomato Estate',    lat: 16.2076, lng: 77.3463, crop_type: 'tomato', acreage:  6.8, typical_yield_kg:  950, harvest_window_start: '2026-03-20', harvest_window_end: '2026-05-25' },
-  { id: 'farm-004', name: 'Chikkaballapur Cherry Tomatoes', lat: 13.4322, lng: 77.7275, crop_type: 'tomato', acreage:  9.1, typical_yield_kg: 1500, harvest_window_start: '2026-03-12', harvest_window_end: '2026-05-28' },
-  { id: 'farm-005', name: 'Bellary Tomato Farmers Union',   lat: 15.1394, lng: 76.9214, crop_type: 'tomato', acreage: 14.0, typical_yield_kg: 2000, harvest_window_start: '2026-03-18', harvest_window_end: '2026-06-05' },
+  { id: 'farm-001', name: 'Nandi Valley Tomatoes',          lat: 13.0827, lng: 77.5439, crop_type: 'tomato', acreage:  8.4, typical_yield_kg: 1200, harvest_window_start: '2026-06-15', harvest_window_end: '2026-07-30' },
+  { id: 'farm-002', name: 'Tumkur Organic Tomato Coop',     lat: 13.3409, lng: 77.1011, crop_type: 'tomato', acreage: 11.2, typical_yield_kg: 1800, harvest_window_start: '2026-06-12', harvest_window_end: '2026-07-25' },
+  { id: 'farm-003', name: 'Raichur Table Tomato Estate',    lat: 16.2076, lng: 77.3463, crop_type: 'tomato', acreage:  6.8, typical_yield_kg: 4000, harvest_window_start: '2026-06-26', harvest_window_end: '2026-08-30' },
+  { id: 'farm-004', name: 'Chikkaballapur Cherry Tomatoes', lat: 13.4322, lng: 77.7275, crop_type: 'tomato', acreage:  9.1, typical_yield_kg: 1500, harvest_window_start: '2026-06-18', harvest_window_end: '2026-08-01' },
+  { id: 'farm-005', name: 'Bellary Tomato Farmers Union',   lat: 15.1394, lng: 76.9214, crop_type: 'tomato', acreage: 14.0, typical_yield_kg: 4000, harvest_window_start: '2026-06-26', harvest_window_end: '2026-08-30' },
   // Maharashtra — Onions
-  { id: 'farm-006', name: 'Nasik Hills Onion Growers',      lat: 19.9975, lng: 73.7898, crop_type: 'onion',  acreage: 10.5, typical_yield_kg:  900, harvest_window_start: '2026-01-10', harvest_window_end: '2026-03-20' },
-  { id: 'farm-007', name: 'Solapur Red Onion Collective',   lat: 17.6599, lng: 75.9064, crop_type: 'onion',  acreage: 18.3, typical_yield_kg: 1500, harvest_window_start: '2026-01-05', harvest_window_end: '2026-03-15' },
-  { id: 'farm-008', name: 'Sangli Onion Cooperatives',      lat: 16.8524, lng: 74.5815, crop_type: 'onion',  acreage: 12.7, typical_yield_kg: 1200, harvest_window_start: '2026-01-12', harvest_window_end: '2026-03-25' },
-  { id: 'farm-009', name: 'Dhule Onion Plains',             lat: 20.9042, lng: 74.7778, crop_type: 'onion',  acreage:  9.4, typical_yield_kg:  800, harvest_window_start: '2026-01-08', harvest_window_end: '2026-03-18' },
-  { id: 'farm-010', name: 'Pune Plateau Onions',            lat: 18.5204, lng: 73.8567, crop_type: 'onion',  acreage:  7.2, typical_yield_kg:  600, harvest_window_start: '2026-01-15', harvest_window_end: '2026-03-22' },
+  { id: 'farm-006', name: 'Nasik Hills Onion Growers',      lat: 19.9975, lng: 73.7898, crop_type: 'onion',  acreage: 10.5, typical_yield_kg:  900, harvest_window_start: '2026-06-14', harvest_window_end: '2026-07-15' },
+  { id: 'farm-007', name: 'Solapur Red Onion Collective',   lat: 17.6599, lng: 75.9064, crop_type: 'onion',  acreage: 18.3, typical_yield_kg: 4000, harvest_window_start: '2026-06-26', harvest_window_end: '2026-08-30' },
+  { id: 'farm-008', name: 'Sangli Onion Cooperatives',      lat: 16.8524, lng: 74.5815, crop_type: 'onion',  acreage: 12.7, typical_yield_kg: 4000, harvest_window_start: '2026-06-26', harvest_window_end: '2026-08-30' },
+  { id: 'farm-009', name: 'Dhule Onion Plains',             lat: 20.9042, lng: 74.7778, crop_type: 'onion',  acreage:  9.4, typical_yield_kg: 4000, harvest_window_start: '2026-06-26', harvest_window_end: '2026-08-30' },
+  { id: 'farm-010', name: 'Pune Plateau Onions',            lat: 18.5204, lng: 73.8567, crop_type: 'onion',  acreage:  7.2, typical_yield_kg: 4000, harvest_window_start: '2026-06-26', harvest_window_end: '2026-08-30' },
   // Karnataka — Bananas
-  { id: 'farm-011', name: 'Chikmagalur Robusta Banana',     lat: 13.3161, lng: 75.7720, crop_type: 'banana', acreage: 15.6, typical_yield_kg:  700, harvest_window_start: '2026-05-01', harvest_window_end: '2026-08-30' },
-  { id: 'farm-012', name: 'Coastal Karwar Cavendish',       lat: 14.8136, lng: 74.1286, crop_type: 'banana', acreage: 22.1, typical_yield_kg: 1200, harvest_window_start: '2026-04-20', harvest_window_end: '2026-09-10' },
-  { id: 'farm-013', name: 'Mysore Nendran Banana Trust',    lat: 12.2958, lng: 76.6394, crop_type: 'banana', acreage: 11.0, typical_yield_kg:  500, harvest_window_start: '2026-05-05', harvest_window_end: '2026-08-15' },
+  { id: 'farm-011', name: 'Chikmagalur Robusta Banana',     lat: 13.3161, lng: 75.7720, crop_type: 'banana', acreage: 15.6, typical_yield_kg:  700, harvest_window_start: '2026-06-16', harvest_window_end: '2026-09-30' },
+  { id: 'farm-012', name: 'Coastal Karwar Cavendish',       lat: 14.8136, lng: 74.1286, crop_type: 'banana', acreage: 22.1, typical_yield_kg: 4000, harvest_window_start: '2026-06-26', harvest_window_end: '2026-08-30' },
+  { id: 'farm-013', name: 'Mysore Nendran Banana Trust',    lat: 12.2958, lng: 76.6394, crop_type: 'banana', acreage: 11.0, typical_yield_kg: 4000, harvest_window_start: '2026-06-26', harvest_window_end: '2026-08-30' },
   { id: 'farm-014', name: 'Shivamogga Hill Plantains',      lat: 13.9299, lng: 75.5681, crop_type: 'banana', acreage: 13.8, typical_yield_kg:  850, harvest_window_start: '2026-05-12', harvest_window_end: '2026-09-05' },
   { id: 'farm-015', name: 'Haveri Grand Naine',             lat: 14.8006, lng: 75.3910, crop_type: 'banana', acreage: 19.4, typical_yield_kg: 1000, harvest_window_start: '2026-04-28', harvest_window_end: '2026-08-28' },
   // Maharashtra — Mangoes
-  { id: 'farm-016', name: 'Ratnagiri Alphonso Grove',       lat: 16.9902, lng: 73.3120, crop_type: 'mango',  acreage: 25.0, typical_yield_kg:  750, harvest_window_start: '2026-04-01', harvest_window_end: '2026-06-30' },
-  { id: 'farm-017', name: 'Devgad Mango Estates',           lat: 16.3869, lng: 73.3984, crop_type: 'mango',  acreage: 30.5, typical_yield_kg:  900, harvest_window_start: '2026-04-10', harvest_window_end: '2026-07-15' },
+  { id: 'farm-016', name: 'Ratnagiri Alphonso Grove',       lat: 16.9902, lng: 73.3120, crop_type: 'mango',  acreage: 25.0, typical_yield_kg:  750, harvest_window_start: '2026-06-13', harvest_window_end: '2026-07-30' },
+  { id: 'farm-017', name: 'Devgad Mango Estates',           lat: 16.3869, lng: 73.3984, crop_type: 'mango',  acreage: 30.5, typical_yield_kg:  900, harvest_window_start: '2026-06-19', harvest_window_end: '2026-08-15' },
   { id: 'farm-018', name: 'Belgaum Kesar Block',            lat: 15.8497, lng: 74.4977, crop_type: 'mango',  acreage: 18.2, typical_yield_kg:  500, harvest_window_start: '2026-03-25', harvest_window_end: '2026-06-20' },
   { id: 'farm-019', name: 'Dharwad Banganapalli Farms',     lat: 15.4589, lng: 75.0078, crop_type: 'mango',  acreage: 12.3, typical_yield_kg:  400, harvest_window_start: '2026-04-05', harvest_window_end: '2026-06-25' },
   { id: 'farm-020', name: 'Bijapur Mango Collective',       lat: 16.8244, lng: 75.7154, crop_type: 'mango',  acreage: 21.7, typical_yield_kg:  650, harvest_window_start: '2026-03-30', harvest_window_end: '2026-07-10' },
@@ -98,6 +98,102 @@ const _RAW_TRUCKS = [
 ];
 
 export const DEMO_TRUCKS = _RAW_TRUCKS.map(withTruckContacts);
+
+/** D2 — seeded direct buyer demand posts (mirrors data/sample_buyer_demands.csv). */
+export const DEMO_BUYER_DEMANDS = [
+  {
+    id: 'buyer-dp-priv-01-tomato',
+    demand_point_id: 'dp-priv-01',
+    buyer_name: 'Taj West End Kitchen',
+    buyer_type: 'restaurant',
+    crop_type: 'tomato',
+    quantity_kg: 800,
+    price_per_kg: 22,
+  },
+  {
+    id: 'buyer-dp-priv-02-onion',
+    demand_point_id: 'dp-priv-02',
+    buyer_name: 'Metro Cash Nashik',
+    buyer_type: 'supermarket',
+    crop_type: 'onion',
+    quantity_kg: 600,
+    price_per_kg: 16,
+  },
+  {
+    id: 'buyer-dp-priv-03-banana',
+    demand_point_id: 'dp-priv-03',
+    buyer_name: 'Export Hub Hubli',
+    buyer_type: 'exporter',
+    crop_type: 'banana',
+    quantity_kg: 500,
+    price_per_kg: 25,
+  },
+];
+
+/** D4 — seeded market offers (mirrors data/sample_market_offers.csv). */
+export const DEMO_MARKET_OFFERS = {
+  offers: [
+    {
+      id: 'market-ask-dp-priv-01-tomato-seed001',
+      side: 'ask',
+      role: 'farmer',
+      farm_id: 'farm-001',
+      buyer_name: null,
+      demand_point_id: 'dp-priv-01',
+      crop_type: 'tomato',
+      quantity_kg: 800,
+      price_per_kg: 22,
+      status: 'accepted',
+    },
+    {
+      id: 'market-ask-dp-priv-02-onion-seed002',
+      side: 'ask',
+      role: 'farmer',
+      farm_id: 'farm-006',
+      buyer_name: null,
+      demand_point_id: 'dp-priv-02',
+      crop_type: 'onion',
+      quantity_kg: 600,
+      price_per_kg: 18,
+      status: 'open',
+    },
+    {
+      id: 'market-bid-dp-priv-03-banana-seed003',
+      side: 'bid',
+      role: 'buyer',
+      farm_id: null,
+      buyer_name: 'Export Hub Hubli',
+      demand_point_id: 'dp-priv-03',
+      crop_type: 'banana',
+      quantity_kg: 500,
+      price_per_kg: 25,
+      status: 'open',
+    },
+    {
+      id: 'market-bid-dp-priv-01-tomato-seed004',
+      side: 'bid',
+      role: 'buyer',
+      farm_id: null,
+      buyer_name: 'Taj West End Kitchen',
+      demand_point_id: 'dp-priv-01',
+      crop_type: 'tomato',
+      quantity_kg: 750,
+      price_per_kg: 23,
+      status: 'open',
+    },
+  ],
+  commitments: [
+    {
+      offer_id: 'market-ask-dp-priv-01-tomato-seed001',
+      farm_id: 'farm-001',
+      demand_point_id: 'dp-priv-01',
+      crop_type: 'tomato',
+      quantity_kg: 800,
+      price_per_kg: 22,
+      accepted_at: new Date().toISOString(),
+    },
+  ],
+};
 
 /** Undersized fleet to trigger validator capacity retries (demo / QA). */
 export const DEMO_TRUCKS_CAPACITY_STRESS = DEMO_TRUCKS.slice(0, 3).map((t) => ({

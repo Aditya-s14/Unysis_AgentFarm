@@ -1,11 +1,17 @@
 import Head from 'next/head';
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import DashboardLayout from '@/components/Dashboard/DashboardLayout';
 import ScenarioForm from '@/components/ScenarioBuilder/ScenarioForm';
+import FarmerCommitmentPanel from '@/components/Farmer/FarmerCommitmentPanel';
+import PriceDiscoveryBoard from '@/components/Farmer/PriceDiscoveryBoard';
+import BuyerDemandPanel from '@/components/Buyer/BuyerDemandPanel';
+import FarmEconomicsPanel from '@/components/Farmer/FarmEconomicsPanel';
+import TruckGapAlertPanel from '@/components/Dashboard/TruckGapAlertPanel';
 import MapView from '@/components/Map/MapView';
 import SimulationPanel from '@/components/AgentSimulation/SimulationPanel';
 import WeatherSourceBanner from '@/components/Dashboard/WeatherSourceBanner';
+import { checkTruckGap } from '@/api/client';
 import {
   DEMO_MAP_FARMS,
   DEMO_MAP_MANDIS,
@@ -29,7 +35,16 @@ export default function ScenarioPage() {
   const [elapsedMs, setElapsedMs]     = useState(null);
   const [simError, setSimError]       = useState(null);
   const [selectedType, setSelectedType] = useState('monsoon_disruption');
+  const [truckGap, setTruckGap]       = useState(null);
   const startRef = useRef(null);
+
+  useEffect(() => {
+    if (!Array.isArray(DEMO_FARMS) || DEMO_FARMS.length === 0) return;
+    if (!Array.isArray(DEMO_TRUCKS) || DEMO_TRUCKS.length === 0) return;
+    checkTruckGap({ farms: DEMO_FARMS, trucks: DEMO_TRUCKS })
+      .then(setTruckGap)
+      .catch(() => setTruckGap(null));
+  }, []);
 
   const handleRunStart = (scenarioType) => {
     if (scenarioType) setSelectedType(scenarioType);
@@ -42,6 +57,9 @@ export default function ScenarioPage() {
     setElapsedMs(elapsed);
     setApiResult(result);
     setSimTraces(result?.agent_traces || []);
+    if (result?.calendar_alert) {
+      setTruckGap(result.calendar_alert);
+    }
     setSimState('simulating');
   };
 
@@ -73,8 +91,14 @@ export default function ScenarioPage() {
       <>
         <Head><title>Scenario | AgentFarm</title></Head>
         <DashboardLayout title="Run a Scenario" subtitle={`${DEMO_FARMS.length} farms · ${DEMO_DEMAND_POINTS.length} mandis · ${DEMO_TRUCKS.length} trucks`}>
+          <div className="mb-4">
+            <TruckGapAlertPanel analysis={truckGap} />
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1 space-y-0">
+              <FarmerCommitmentPanel />
+              <PriceDiscoveryBoard compact />
+              <BuyerDemandPanel compact />
               <ScenarioForm
                 onRunStart={handleRunStart}
                 onComplete={handleRunComplete}
@@ -235,6 +259,8 @@ export default function ScenarioPage() {
             <WeatherSourceBanner weatherSummary={apiResult.weather_summary} />
           )}
 
+          <TruckGapAlertPanel analysis={truckGap || apiResult?.calendar_alert} />
+
           {/* ── Simulation panel ── */}
           <SimulationPanel
             traces={simTraces}
@@ -243,7 +269,11 @@ export default function ScenarioPage() {
             onComplete={handleSimComplete}
           />
 
-          {/* ── Done: summary card + CTA ── */}
+          {/* ── Done: farm economics + summary card ── */}
+          {simState === 'done' && apiResult && (
+            <FarmEconomicsPanel compact cachedRun={apiResult} />
+          )}
+
           {simState === 'done' && (
             <div
               className="p-6 space-y-4"

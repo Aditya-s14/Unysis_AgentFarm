@@ -7,6 +7,13 @@ import {
 import DashboardLayout from '@/components/Dashboard/DashboardLayout';
 import OverviewPanel from '@/components/Dashboard/OverviewPanel';
 import FpoApprovalPanel from '@/components/Dashboard/FpoApprovalPanel';
+import TruckGapAlertPanel from '@/components/Dashboard/TruckGapAlertPanel';
+import PriceDiscoveryBoard from '@/components/Farmer/PriceDiscoveryBoard';
+import FarmEconomicsPanel from '@/components/Farmer/FarmEconomicsPanel';
+import BuyerDemandPanel from '@/components/Buyer/BuyerDemandPanel';
+import OfferLedgerPanel from '@/components/Market/OfferLedgerPanel';
+import BuyerRoutePriorityBanner from '@/components/Buyer/BuyerRoutePriorityBanner';
+import SeasonTrendPanel from '@/components/Dashboard/SeasonTrendPanel';
 import WeatherRiskPanel from '@/components/Dashboard/WeatherRiskPanel';
 import KPIGrid from '@/components/KPICards/KPIGrid';
 import { resolveWeatherPanel } from '@/utils/weatherSummary';
@@ -15,7 +22,7 @@ import TruckCard from '@/components/Transport/TruckCard';
 import BreakdownIncidentPanel from '@/components/Transport/BreakdownIncidentPanel';
 import BreakdownReportModal from '@/components/Transport/BreakdownReportModal';
 import DeviationAlertPanel from '@/components/Transport/DeviationAlertPanel';
-import { getBreakdownIncidents, getRun } from '@/api/client';
+import { getBreakdownIncidents, getRun, checkTruckGap } from '@/api/client';
 import useTruckTracking from '@/hooks/useTruckTracking';
 import { displayTruckId } from '@/utils/truckDisplay';
 import { EM_DASH, MIDDOT, SECTION, WARN } from '@/utils/uiChars';
@@ -37,10 +44,16 @@ import {
 import MandiSummaryGrid from '@/components/Mandi/MandiSummaryGrid';
 import MandiRiskHighlights from '@/components/Mandi/MandiRiskHighlights';
 import MandiFulfilmentCard from '@/components/Mandi/MandiFulfilmentCard';
+import DeliveryOutcomeModal from '@/components/Mandi/DeliveryOutcomeModal';
+import useOutcomeLog from '@/hooks/useOutcomeLog';
+import useFarmerCommitments from '@/hooks/useFarmerCommitments';
+import { getMarketCommitmentsForApi } from '@/hooks/useMarketOffers';
 
 const TABS = [
   { id: 'overview',   label: 'OVERVIEW' },
   { id: 'farmer',     label: 'FARMER' },
+  { id: 'buyer',      label: 'BUYER' },
+  { id: 'market',     label: 'MARKET' },
   { id: 'mandi',      label: 'MANDI' },
   { id: 'transport',  label: 'TRANSPORT' },
 ];
@@ -137,6 +150,7 @@ export default function DashboardPage() {
   const [selectedTruckId, setSelectedTruckId] = useState(null);
   const [breakdownIncidents, setBreakdownIncidents] = useState([]);
   const [breakdownModal, setBreakdownModal] = useState(null);
+  const [outcomeModalMandi, setOutcomeModalMandi] = useState(null);
   const [farmerFilters, setFarmerFilters] = useState({
     risk: 'all', crop: 'all', truck: 'all', spoilage: 'all',
   });
@@ -146,7 +160,16 @@ export default function DashboardPage() {
   const [transportFilters, setTransportFilters] = useState({
     status: 'all', mandi: 'all', load: 'all',
   });
+  const [truckGap, setTruckGap] = useState(null);
   const mapPanelRef = useRef(null);
+
+  useEffect(() => {
+    if (!Array.isArray(DEMO_FARMS) || DEMO_FARMS.length === 0) return;
+    if (!Array.isArray(DEMO_TRUCKS) || DEMO_TRUCKS.length === 0) return;
+    checkTruckGap({ farms: DEMO_FARMS, trucks: DEMO_TRUCKS })
+      .then(setTruckGap)
+      .catch(() => setTruckGap(null));
+  }, []);
 
   useEffect(() => {
     if (initialCached) setCached(initialCached);
@@ -155,6 +178,19 @@ export default function DashboardPage() {
   const notificationsDispatched = Boolean(
     cached?.notifications_dispatched_at || cached?.approval_status === 'dispatched',
   );
+
+  const {
+    logMandiOutcome,
+    logging: outcomeLogging,
+    isLogged: isMandiOutcomeLogged,
+  } = useOutcomeLog(runId);
+
+  const { isLocked: isFarmCommitted, getCommitment: getFarmCommitment } = useFarmerCommitments();
+
+  const guaranteedFarmIds = useMemo(() => {
+    const commitments = getMarketCommitmentsForApi();
+    return new Set(commitments.map((c) => c.farm_id));
+  }, [cached, runId]);
 
   const {
     positions: truckPositions,
@@ -413,6 +449,8 @@ export default function DashboardPage() {
       <DashboardLayout title="Dashboard" subtitle={`Run ${runId?.slice(0, 8) || EM_DASH}`}>
         <OverviewPanel lastRun={lastRun} />
 
+        <TruckGapAlertPanel analysis={truckGap || cached?.calendar_alert} />
+
         {runId && (
           <FpoApprovalPanel
             runId={runId}
@@ -459,6 +497,24 @@ export default function DashboardPage() {
           />
         )}
 
+        {outcomeModalMandi && (
+          <DeliveryOutcomeModal
+            mandiRow={outcomeModalMandi}
+            cached={cached}
+            rawRoutes={rawRoutes}
+            farms={Array.isArray(cached?.farms) && cached.farms.length ? cached.farms : DEMO_FARMS}
+            loading={outcomeLogging}
+            onClose={() => setOutcomeModalMandi(null)}
+            onSubmit={(actualOverrides) => logMandiOutcome({
+              mandiRow: outcomeModalMandi,
+              cached,
+              rawRoutes,
+              farms: Array.isArray(cached?.farms) && cached.farms.length ? cached.farms : DEMO_FARMS,
+              actualOverrides,
+            })}
+          />
+        )}
+
         {cached && activeTab === 'overview' && (
           <div className="mt-6">
             <WeatherRiskPanel data={weatherPanel} />
@@ -495,12 +551,16 @@ export default function DashboardPage() {
             {/* ---- OVERVIEW tab -------------------------------------------------------------------------------------- */}
             {activeTab === 'overview' && (
               <>
+                <BuyerRoutePriorityBanner plan={cached?.plan} />
+
                 {/* Waste comparison bar chart */}
                 {kpis && (
                   <div className="mt-6">
                     <WasteBarChart kpis={kpis} />
                   </div>
                 )}
+
+                <SeasonTrendPanel />
 
                 <section className="mt-6">
                   <SectionCard
@@ -542,6 +602,9 @@ export default function DashboardPage() {
             {/* ---- FARMER tab ------------------------------------------------------------------------------------------ */}
             {activeTab === 'farmer' && (
               <section className="mt-6 space-y-4">
+                <PriceDiscoveryBoard />
+                <FarmEconomicsPanel />
+
                 <TabFilterBar>
                   <FilterSelect
                     label="Risk level"
@@ -604,11 +667,14 @@ export default function DashboardPage() {
                       const hours   = stock?.hours_until_spoilage ?? null;
                       const kg      = stock?.kg_at_risk ?? farm.typical_yield_kg;
                       const pickupTime = ESTIMATED_PICKUP_TIMES[idx] || '7:00 AM';
+                      const committed = isFarmCommitted(farm.id);
+                      const commitKg = getFarmCommitment(farm.id)?.tonnage_kg;
+                      const guaranteed = guaranteedFarmIds.has(farm.id);
                       return (
                         <div key={farm.id} className="px-5 py-4">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className="font-syne font-bold text-paper flex items-center gap-2" style={{ fontSize: '13px' }}>
+                              <p className="font-syne font-bold text-paper flex items-center gap-2 flex-wrap" style={{ fontSize: '13px' }}>
                                 <span
                                   aria-hidden
                                   style={{ color: 'var(--green-ok)', fontSize: '10px', lineHeight: 1 }}
@@ -616,6 +682,36 @@ export default function DashboardPage() {
                                   ●
                                 </span>
                                 {farm.name}
+                                {committed && (
+                                  <span
+                                    className="font-mono uppercase"
+                                    style={{
+                                      fontSize: '9px',
+                                      letterSpacing: '0.12em',
+                                      padding: '2px 8px',
+                                      border: '1px solid var(--green-ok)',
+                                      color: 'var(--green-ok)',
+                                      borderRadius: '2px',
+                                    }}
+                                  >
+                                    COMMITTED · {Number(commitKg || 0).toLocaleString()} kg
+                                  </span>
+                                )}
+                                {guaranteed && (
+                                  <span
+                                    className="font-mono uppercase"
+                                    style={{
+                                      fontSize: '9px',
+                                      letterSpacing: '0.12em',
+                                      padding: '2px 8px',
+                                      border: '1px solid var(--accent)',
+                                      color: 'var(--accent)',
+                                      borderRadius: '2px',
+                                    }}
+                                  >
+                                    GUARANTEED
+                                  </span>
+                                )}
                               </p>
                               <p className="font-mono text-muted mt-1" style={{ fontSize: '11px' }}>
                                 {kg.toLocaleString()} kg at risk
@@ -632,6 +728,15 @@ export default function DashboardPage() {
                                   {' '}
                                   No truck assigned yet
                                 </p>
+                              )}
+                              {committed && (
+                                <Link
+                                  href="/scenario"
+                                  className="font-mono mt-2 inline-block"
+                                  style={{ fontSize: '10px', color: 'var(--accent)' }}
+                                >
+                                  Edit on Scenario page →
+                                </Link>
                               )}
                             </div>
                             <UrgencyBadge hours={hours} />
@@ -682,6 +787,20 @@ export default function DashboardPage() {
             )}
 
             {/* MANDI tab — supply fulfilment dashboard */}
+            {/* ---- BUYER tab ------------------------------------------------------------------------------------------- */}
+            {activeTab === 'buyer' && (
+              <section className="mt-6 space-y-4">
+                <BuyerDemandPanel />
+              </section>
+            )}
+
+            {activeTab === 'market' && (
+              <section className="mt-6 space-y-4">
+                <OfferLedgerPanel />
+              </section>
+            )}
+
+            {/* ---- MANDI tab ------------------------------------------------------------------------------------------- */}
             {activeTab === 'mandi' && (
               <section className="mt-6 space-y-8">
                 <MandiSummaryGrid
@@ -744,7 +863,14 @@ export default function DashboardPage() {
                   ) : (
                     <div>
                       {filteredMandiFulfilment.map((row, idx) => (
-                        <MandiFulfilmentCard key={row.id} row={row} isFirst={idx === 0} />
+                        <MandiFulfilmentCard
+                          key={row.id}
+                          row={row}
+                          isFirst={idx === 0}
+                          canLogOutcome={notificationsDispatched}
+                          isLogged={isMandiOutcomeLogged(row.id)}
+                          onConfirmDelivery={setOutcomeModalMandi}
+                        />
                       ))}
                     </div>
                   )}
@@ -776,6 +902,8 @@ export default function DashboardPage() {
             {/* ---- TRANSPORT tab ------------------------------------------------------------------------------------ */}
             {activeTab === 'transport' && (
               <section className="mt-6 space-y-6">
+                <BuyerRoutePriorityBanner plan={cached?.plan} />
+
                 <RouteFilterBar
                   truckIds={routeTruckIds}
                   selectedTruckId={selectedTruckId}

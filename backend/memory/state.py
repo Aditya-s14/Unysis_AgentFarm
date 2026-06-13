@@ -7,8 +7,11 @@ from typing import Annotated, NotRequired, TypedDict
 
 from models.schemas import (
     AtRiskStock,
+    BuyerDemandPost,
     DemandPoint,
     Farm,
+    FarmerCommitment,
+    MarketAcceptedCommitment,
     Plan,
     RoutePlan,
     Truck,
@@ -39,6 +42,9 @@ class AgentFarmState(TypedDict, total=False):
     trucks: list[Truck]
     scenario_type: str
     scenario_type_raw: NotRequired[str]
+    farmer_commitments: NotRequired[list[FarmerCommitment]]
+    buyer_demands: NotRequired[list[BuyerDemandPost]]
+    market_commitments: NotRequired[list[MarketAcceptedCommitment]]
 
     # Weather agent
     weather_events: list[WeatherEvent]
@@ -72,6 +78,7 @@ class AgentFarmState(TypedDict, total=False):
     # Derived / graph-level
     kpis: dict[str, float]       # populated by persist_node after orchestrator_exit
     human_review: bool           # True when max retries exhausted
+    calendar_alert: NotRequired[dict]
 
 
 def initial_agent_farm_state(

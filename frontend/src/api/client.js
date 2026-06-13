@@ -107,4 +107,76 @@ export async function logOutcome(outcomeBody) {
   return data;
 }
 
+/** POST /api/calendar/truck-gap — peak harvest fleet gap analysis + FPO alert. */
+export async function checkTruckGap({ farms, trucks }) {
+  const { data } = await client.post('/calendar/truck-gap', { farms, trucks });
+  return data;
+}
+
+/** GET /api/analytics/season-trends — Tier-2 season-over-season metrics. */
+export async function getSeasonTrends() {
+  const { data } = await client.get('/analytics/season-trends');
+  return data;
+}
+
+/** GET /api/price-board — APMC vs private buyer quotes. */
+export async function getPriceBoard() {
+  const { data } = await client.get('/price-board');
+  return data;
+}
+
+/** POST /api/price-board/accept — farmer accepts private buyer offer. */
+export async function acceptPrivateOffer(body) {
+  const { data } = await client.post('/price-board/accept', body);
+  return data;
+}
+
+/** GET /api/buyer/demand — list direct buyer demand posts. */
+export async function getBuyerDemands() {
+  const { data } = await client.get('/buyer/demand');
+  return data;
+}
+
+/** POST /api/buyer/demand — create/update buyer demand post. */
+export async function postBuyerDemand(body) {
+  const { data } = await client.post('/buyer/demand', body);
+  return data;
+}
+
+/** DELETE /api/buyer/demand/{postId} — remove buyer demand post. */
+export async function deleteBuyerDemand(postId) {
+  const { data } = await client.delete(`/buyer/demand/${postId}`);
+  return data;
+}
+
+/** GET /api/market/offers — list bid/ask ledger offers. */
+export async function getMarketOffers() {
+  const { data } = await client.get('/market/offers');
+  return data;
+}
+
+/** GET /api/market/accepted — list active market commitments. */
+export async function getMarketAccepted() {
+  const { data } = await client.get('/market/accepted');
+  return data;
+}
+
+/** POST /api/market/offer — create bid or ask. */
+export async function postMarketOffer(body) {
+  const { data } = await client.post('/market/offer', body);
+  return data;
+}
+
+/** POST /api/market/accept — accept open offer → guaranteed commitment. */
+export async function acceptMarketOffer(body) {
+  const { data } = await client.post('/market/accept', body);
+  return data;
+}
+
+/** POST /api/economics/farm-margins — per-farm P&L after scenario run. */
+export async function getFarmMargins(body) {
+  const { data } = await client.post('/economics/farm-margins', body);
+  return data;
+}
+
 export default client;

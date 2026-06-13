@@ -27,7 +27,13 @@ function CoreMetric({ label, value, accent }) {
   );
 }
 
-export default function MandiFulfilmentCard({ row, isFirst }) {
+export default function MandiFulfilmentCard({
+  row,
+  isFirst,
+  canLogOutcome,
+  isLogged,
+  onConfirmDelivery,
+}) {
   const [open, setOpen] = useState(false);
   const barWidth = Math.min(100, (row.fulfilmentPct / 200) * 100);
   const statusShort = STATUS_SHORT[row.statusLabel] || row.statusLabel;
@@ -71,29 +77,47 @@ export default function MandiFulfilmentCard({ row, isFirst }) {
             {row.name}
           </h4>
         </div>
-        <span
-          className="font-mono uppercase shrink-0 inline-flex items-center gap-1.5"
-          style={{
-            fontSize: '9px',
-            letterSpacing: '0.14em',
-            padding: '4px 10px',
-            borderRadius: '2px',
-            border: `1px solid ${row.statusColor}`,
-            color: row.statusColor,
-            background: 'rgba(255,255,255,0.03)',
-          }}
-        >
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {isLogged && (
+            <span
+              className="font-mono uppercase inline-flex items-center gap-1.5"
+              style={{
+                fontSize: '9px',
+                letterSpacing: '0.14em',
+                padding: '4px 10px',
+                borderRadius: '2px',
+                border: '1px solid var(--green-ok)',
+                color: 'var(--green-ok)',
+                background: 'rgba(76, 175, 80, 0.08)',
+              }}
+            >
+              LOGGED
+            </span>
+          )}
           <span
+            className="font-mono uppercase inline-flex items-center gap-1.5"
             style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: row.statusColor,
-              flexShrink: 0,
+              fontSize: '9px',
+              letterSpacing: '0.14em',
+              padding: '4px 10px',
+              borderRadius: '2px',
+              border: `1px solid ${row.statusColor}`,
+              color: row.statusColor,
+              background: 'rgba(255,255,255,0.03)',
             }}
-          />
-          {statusShort}
-        </span>
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: row.statusColor,
+                flexShrink: 0,
+              }}
+            />
+            {statusShort}
+          </span>
+        </div>
       </div>
 
       {/* Core numbers */}
@@ -148,6 +172,24 @@ export default function MandiFulfilmentCard({ row, isFirst }) {
           />
         </div>
       </div>
+
+      {canLogOutcome && row.incomingSupply > 0 && !isLogged && onConfirmDelivery && (
+        <button
+          type="button"
+          onClick={() => onConfirmDelivery(row)}
+          className="mb-4 font-mono uppercase tracking-wider w-full py-2"
+          style={{
+            fontSize: '10px',
+            letterSpacing: '0.12em',
+            border: '1px solid var(--accent)',
+            color: 'var(--accent)',
+            borderRadius: '2px',
+            background: 'rgba(245, 166, 35, 0.06)',
+          }}
+        >
+          Confirm delivery
+        </button>
+      )}
 
       {/* Details expander */}
       <button

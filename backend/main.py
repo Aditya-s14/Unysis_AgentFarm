@@ -13,7 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from config import get_settings
 from routes.advisor import router as advisor_router
+from routes.analytics import router as analytics_router
 from routes.breakdown import router as breakdown_router
+from routes.calendar import router as calendar_router
+from routes.pricing import router as pricing_router
+from routes.buyer import router as buyer_router
+from routes.market import router as market_router
+from routes.economics import router as economics_router
 from routes.runs import router as runs_router
 from routes.tracking import router as tracking_router
 from routes.scenario import router as scenario_router
@@ -34,6 +40,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await init_db()
     await seed_if_empty()
     await backfill_outcome_dims_from_csv()
+
+    from tools.buyer_demand_store import seed_if_empty as seed_buyer_demands_if_empty
+    await seed_buyer_demands_if_empty()
+
+    from tools.market_offer_store import seed_if_empty as seed_market_offers_if_empty
+    await seed_market_offers_if_empty()
 
     engine: AsyncEngine = get_engine()
     client = redis.from_url(settings.REDIS_URL, decode_responses=True)
@@ -70,6 +82,12 @@ app.add_middleware(
 
 # --- Routers ---
 app.include_router(scenario_router, prefix="/api")
+app.include_router(calendar_router, prefix="/api")
+app.include_router(analytics_router, prefix="/api")
+app.include_router(pricing_router, prefix="/api")
+app.include_router(buyer_router, prefix="/api")
+app.include_router(market_router, prefix="/api")
+app.include_router(economics_router, prefix="/api")
 app.include_router(runs_router, prefix="/api")
 app.include_router(breakdown_router, prefix="/api")
 app.include_router(tracking_router, prefix="/api")

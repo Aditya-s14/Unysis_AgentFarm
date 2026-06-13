@@ -194,6 +194,7 @@ class PlanOutcomeRow(Base):
         nullable=True,
         index=True,
     )
+    season: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
 
     plan: Mapped[PlanTable] = relationship("PlanTable", back_populates="outcomes")
 

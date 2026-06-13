@@ -10,13 +10,16 @@ from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 from config import get_settings
 from models.schemas import (
     AtRiskStock,
+    BuyerDemandPost,
     DemandPoint,
     Farm,
+    MarketAcceptedCommitment,
     Route,
     RoutePlan,
     RouteStop,
     Truck,
 )
+from tools.market_routing import market_committed_qty_at_dp
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +29,22 @@ def _demand_at_farm(farm: Farm, at_risk: list[AtRiskStock]) -> int:
     return max(1, min(int(kg), 50_000))
 
 
-def _demand_at_dp(dp: DemandPoint) -> int:
-    return max(1, int(dp.base_demand_per_day / 50))
+def _demand_at_dp(
+    dp: DemandPoint,
+    buyer_demands: list[BuyerDemandPost] | None = None,
+    market_commitments: list[MarketAcceptedCommitment] | None = None,
+) -> int:
+    base = max(1, int(dp.base_demand_per_day / 50))
+    boost_kg = 0.0
+    if dp.type == "private":
+        if buyer_demands:
+            boost_kg += sum(
+                p.quantity_kg for p in buyer_demands if p.demand_point_id == dp.id
+            )
+        boost_kg += market_committed_qty_at_dp(dp, market_commitments)
+        if boost_kg > 0:
+            return max(base, int(boost_kg / 50))
+    return base
 
 
 def _build_demands(
@@ -36,6 +53,8 @@ def _build_demands(
     at_risk_stock: list[AtRiskStock],
     *,
     demand_scale: float = 1.0,
+    buyer_demands: list[BuyerDemandPost] | None = None,
+    market_commitments: list[MarketAcceptedCommitment] | None = None,
 ) -> list[int]:
     scale = max(0.1, min(1.0, demand_scale))
     n = 1 + len(farms) + len(demand_points)
@@ -43,7 +62,9 @@ def _build_demands(
     for i, farm in enumerate(farms):
         demands[1 + i] = max(1, int(_demand_at_farm(farm, at_risk_stock) * scale))
     for j, dp in enumerate(demand_points):
-        demands[1 + len(farms) + j] = max(1, int(_demand_at_dp(dp) * scale))
+        demands[1 + len(farms) + j] = max(
+            1, int(_demand_at_dp(dp, buyer_demands, market_commitments) * scale),
+        )
     return demands
 
 
@@ -260,6 +281,8 @@ def solve_vrp(
     at_risk_stock: list[AtRiskStock],
     distance_matrix: list[list[float]],
     demand_scale: float = 1.0,
+    buyer_demands: list[BuyerDemandPost] | None = None,
+    market_commitments: list[MarketAcceptedCommitment] | None = None,
 ) -> RoutePlan:
     """
     CVRP on nodes ``[depot, *farms, *demand_points]`` (index 0 = depot).
@@ -280,6 +303,8 @@ def solve_vrp(
         demand_points,
         at_risk_stock,
         demand_scale=demand_scale,
+        buyer_demands=buyer_demands,
+        market_commitments=market_commitments,
     )
     tl = max(1, int(get_settings().vrp_time_limit))
 

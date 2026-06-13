@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from config import get_settings
+
+DEFAULT_OUTCOME_SEASON = "Summer 2026"
 from models.db_models import (
     Base,
     DemandPointRow,
@@ -82,6 +84,7 @@ async def _backfill_outcome_dims_from_csv(conn: Any) -> None:
             dow = (row.get("weekday") or "").strip() or None
             crop = (row.get("crop_type") or "").strip() or None
             road = (row.get("road_segment") or "").strip() or None
+            season = (row.get("season") or "").strip() or None
             await conn.execute(
                 text(
                     """
@@ -89,13 +92,14 @@ async def _backfill_outcome_dims_from_csv(conn: Any) -> None:
                     SET demand_point_id = :dp,
                         crop_type = :crop,
                         day_of_week = :dow,
-                        road_segment = :road
+                        road_segment = :road,
+                        season = :season
                     WHERE o.plan_id = (
                         SELECT p.id FROM plans AS p WHERE p.external_ref = :ext LIMIT 1
                     )
                     """,
                 ),
-                {"dp": mandi, "crop": crop, "dow": dow, "road": road, "ext": ext},
+                {"dp": mandi, "crop": crop, "dow": dow, "road": road, "season": season, "ext": ext},
             )
 
 
@@ -110,6 +114,8 @@ async def _ensure_plan_outcome_memory_columns(conn: Any) -> None:
         "CREATE INDEX IF NOT EXISTS ix_plan_outcomes_crop_type ON plan_outcomes (crop_type)",
         "CREATE INDEX IF NOT EXISTS ix_plan_outcomes_day_of_week ON plan_outcomes (day_of_week)",
         "CREATE INDEX IF NOT EXISTS ix_plan_outcomes_road_segment ON plan_outcomes (road_segment)",
+        "ALTER TABLE plan_outcomes ADD COLUMN IF NOT EXISTS season VARCHAR(32)",
+        "CREATE INDEX IF NOT EXISTS ix_plan_outcomes_season ON plan_outcomes (season)",
     ]
     for ddl in stmts:
         await conn.execute(text(ddl))
@@ -279,6 +285,7 @@ async def _seed_outcomes_from_csv(session: AsyncSession, root: Path) -> None:
             road = (row.get("road_segment") or "").strip() or None
             mandi = (row.get("mandi_id") or "").strip() or None
             dow = (row.get("weekday") or "").strip() or None
+            season = (row.get("season") or "").strip() or None
             session.add(
                 PlanOutcomeRow(
                     plan_id=plan.id,
@@ -296,6 +303,7 @@ async def _seed_outcomes_from_csv(session: AsyncSession, root: Path) -> None:
                     crop_type=crop,
                     day_of_week=dow,
                     road_segment=road,
+                    season=season,
                 )
             )
 
@@ -479,6 +487,7 @@ async def create_plan_outcome(
     crop_type: str | None = None,
     day_of_week: str | None = None,
     road_segment: str | None = None,
+    season: str | None = None,
 ) -> PlanOutcomeRow:
     async with get_session_maker()() as session:
         row = PlanOutcomeRow(
@@ -495,6 +504,7 @@ async def create_plan_outcome(
             crop_type=crop_type,
             day_of_week=day_of_week,
             road_segment=road_segment,
+            season=season or DEFAULT_OUTCOME_SEASON,
         )
         session.add(row)
         await session.commit()

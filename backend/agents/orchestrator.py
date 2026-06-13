@@ -20,12 +20,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from agents.metrics import compute_kpi_delta
 from agents.review_flags import max_retries, needs_human_review
 from memory.state import AgentFarmState, AgentTrace
 from models.schemas import Plan, ValidationResult
+from tools.crop_calendar import analyze_truck_gap
+from tools.notifications.calendar_alerts import dispatch_truck_gap_alert
 from tools.scenario_effects import normalize_scenario_type, scenario_trace_note
 
 logger = logging.getLogger(__name__)
@@ -79,10 +81,26 @@ async def orchestrator_entry(state: AgentFarmState) -> AgentFarmState:
     notes = (
         f"run_id={run_id}; scenario_type={scenario_type}; "
         f"farms={len(farms)}, demand_points={len(demand_points)}, trucks={len(trucks)}; "
+        f"farmer_commitments={len(state.get('farmer_commitments') or [])}; "
+        f"buyer_demands={len(state.get('buyer_demands') or [])}; "
+        f"market_commitments={len(state.get('market_commitments') or [])}; "
         f"historical_outcomes_available={recent_outcomes_count}; "
         f"input_errors={input_errors or 'none'}. "
         + scenario_trace_note(scenario_type)
     )
+
+    calendar_alert_sent = False
+    if not input_errors:
+        cal = analyze_truck_gap(farms, trucks, date.today())
+        state["calendar_alert"] = cal.to_dict()
+        if cal.alert_due:
+            dispatch_stats = await dispatch_truck_gap_alert(cal, run_id=run_id)
+            calendar_alert_sent = bool(dispatch_stats.get("dispatched"))
+        notes += (
+            f" calendar_peak={cal.peak_date.isoformat()}; "
+            f"truck_gap={cal.truck_gap}; alert_sent={calendar_alert_sent}."
+        )
+
     trace: AgentTrace = {
         "agent_name": "orchestrator_entry",
         "start_time": t0.isoformat(),

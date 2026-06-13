@@ -59,6 +59,7 @@ async def log_outcome(body: PlanOutcome) -> dict:
             crop_type=body.crop_type,
             day_of_week=body.day_of_week,
             road_segment=body.road_segment,
+            season=body.season,
         )
         return {"id": str(row.id), "plan_id": str(row.plan_id)}
     except Exception as exc:

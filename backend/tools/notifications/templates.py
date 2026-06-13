@@ -231,3 +231,26 @@ def render_deviation_fpo_digest(
         truck_id=truck_id,
         deviation_km=deviation_km,
     )[:160]
+
+
+CALENDAR_TRUCK_GAP_FPO_EN = (
+    "AgentFarm calendar alert: peak harvest on {peak_date} ({days} days). "
+    "Registered {registered} trucks; need {needed} (gap {gap}). "
+    "Crops: {crop_summary}. Register additional fleet."
+)
+
+
+def render_calendar_truck_gap_fpo(analysis) -> str:
+    """Render FPO digest for pre-peak truck shortage (crop calendar)."""
+    from tools.crop_calendar import TruckGapAnalysis
+
+    if not isinstance(analysis, TruckGapAnalysis):
+        raise TypeError("analysis must be TruckGapAnalysis")
+    return CALENDAR_TRUCK_GAP_FPO_EN.format(
+        peak_date=analysis.peak_date.isoformat(),
+        days=analysis.days_until_peak,
+        registered=analysis.registered_trucks,
+        needed=analysis.trucks_needed,
+        gap=analysis.truck_gap,
+        crop_summary=analysis.crop_summary[:48],
+    )[:160]

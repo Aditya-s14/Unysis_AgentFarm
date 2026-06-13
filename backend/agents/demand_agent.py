@@ -33,7 +33,13 @@ from typing import Any
 from config import get_settings
 from memory.outcome_store import get_demand_history
 from memory.state import AgentFarmState, AgentTrace
-from models.schemas import DemandPoint, PlanOutcome
+from models.schemas import DemandPoint, FarmerCommitment, BuyerDemandPost, PlanOutcome
+from tools.commitments import (
+    COMMITMENT_WEIGHT,
+    FORECAST_WEIGHT,
+    aggregate_commitments_by_mandi,
+)
+from tools.buyer_demands import aggregate_buyer_demand_by_mandi
 from tools.scenario_effects import scenario_trace_note
 
 logger = logging.getLogger(__name__)
@@ -198,6 +204,14 @@ async def run(state: AgentFarmState) -> AgentFarmState:
 
     forecast: dict[str, list[float]] = {}
 
+    raw_commitments: list[FarmerCommitment] = list(state.get("farmer_commitments") or [])
+    committed_by_dp = aggregate_commitments_by_mandi(raw_commitments, farms, demand_points)
+    weighted_applied = bool(committed_by_dp)
+
+    raw_buyer_demands: list[BuyerDemandPost] = list(state.get("buyer_demands") or [])
+    buyer_by_dp = aggregate_buyer_demand_by_mandi(raw_buyer_demands)
+    buyer_applied = bool(buyer_by_dp)
+
     for dp in demand_points:
         base = dp.base_demand_per_day
         today_dow = today.strftime("%A").lower()
@@ -224,6 +238,19 @@ async def run(state: AgentFarmState) -> AgentFarmState:
                 combined = rule_mult
 
             day_forecast = round(base * combined * supply_factor * bias, 2)
+
+            if offset == 0:
+                committed_kg = committed_by_dp.get(dp.id, 0.0)
+                if committed_kg > 0:
+                    day_forecast = round(
+                        FORECAST_WEIGHT * day_forecast + COMMITMENT_WEIGHT * committed_kg,
+                        2,
+                    )
+                if dp.type == "private":
+                    posted_kg = buyer_by_dp.get(dp.id, 0.0)
+                    if posted_kg > 0:
+                        day_forecast = round(max(day_forecast, posted_kg), 2)
+
             series.append(day_forecast)
 
         forecast[dp.id] = series
@@ -247,7 +274,12 @@ async def run(state: AgentFarmState) -> AgentFarmState:
             f"{len(demand_points)} demand points; 7-day forecast; "
             f"llm={'yes' if llm_tokens else 'no (rule-based fallback)'}; "
             f"supply_factor={supply_factor}; bias_correction=applied; "
-            f"severe_pct={severe_pct}%. "
+            f"severe_pct={severe_pct}%; "
+            f"commitments={len(raw_commitments)}"
+            + ("; weighted_demand=applied" if weighted_applied else "")
+            + (f"; buyer_demands={len(raw_buyer_demands)}" if raw_buyer_demands else "")
+            + ("; buyer_demand_floor=applied" if buyer_applied else "")
+            + ". "
             + scenario_trace_note(state.get("scenario_type", ""))
         ),
         "token_count": llm_tokens,

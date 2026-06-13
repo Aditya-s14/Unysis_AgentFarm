@@ -1,0 +1,4 @@
+id,buyer_name,buyer_type,demand_point_id,crop_type,quantity_kg,price_per_kg
+buyer-dp-priv-01-tomato,Taj West End Kitchen,restaurant,dp-priv-01,tomato,800,22
+buyer-dp-priv-02-onion,Metro Cash Nashik,supermarket,dp-priv-02,onion,600,16
+buyer-dp-priv-03-banana,Export Hub Hubli,exporter,dp-priv-03,banana,500,25

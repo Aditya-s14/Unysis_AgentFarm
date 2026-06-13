@@ -44,6 +44,146 @@ class DemandPoint(BaseModel):
     base_demand_per_day: float = Field(ge=0)
 
 
+class FarmerCommitment(BaseModel):
+    """Pre-harvest tonnage locked by a farmer (I2 — weighted demand input)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    farm_id: str
+    tonnage_kg: float = Field(ge=0)
+    demand_point_id: str | None = None
+
+
+class PriceOfferAcceptance(BaseModel):
+    """Farmer acceptance of a private buyer offer (D1 — price discovery)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    farm_id: str
+    crop_type: str
+    apmc_demand_point_id: str
+    private_demand_point_id: str
+    accepted_price_per_kg: float = Field(gt=0)
+    tonnage_kg: float = Field(gt=0)
+    accepted_at: datetime | None = None
+
+
+class BuyerDemandPost(BaseModel):
+    """Direct buyer crop demand posted on a private demand point (D2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    demand_point_id: str
+    buyer_name: str
+    buyer_type: Literal["restaurant", "supermarket", "exporter"]
+    crop_type: str
+    quantity_kg: float = Field(gt=0)
+    price_per_kg: float = Field(gt=0)
+    posted_at: datetime | None = None
+
+
+class BuyerDemandPostCreate(BaseModel):
+    """POST body for creating/updating a buyer demand post (id derived server-side)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    demand_point_id: str
+    buyer_name: str
+    buyer_type: Literal["restaurant", "supermarket", "exporter"]
+    crop_type: str
+    quantity_kg: float = Field(gt=0)
+    price_per_kg: float = Field(gt=0)
+
+
+class MarketOffer(BaseModel):
+    """Bid or ask on the offer ledger (D4 — auditable market transactions)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    side: Literal["bid", "ask"]
+    role: Literal["farmer", "buyer"]
+    farm_id: str | None = None
+    buyer_name: str | None = None
+    demand_point_id: str
+    crop_type: str
+    quantity_kg: float = Field(gt=0)
+    price_per_kg: float = Field(gt=0)
+    status: Literal["open", "accepted", "cancelled"] = "open"
+    created_at: datetime | None = None
+    accepted_at: datetime | None = None
+
+
+class MarketOfferCreate(BaseModel):
+    """POST body for creating a new market offer (append-only ledger entry)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    side: Literal["bid", "ask"]
+    role: Literal["farmer", "buyer"]
+    farm_id: str | None = None
+    buyer_name: str | None = None
+    demand_point_id: str
+    crop_type: str
+    quantity_kg: float = Field(gt=0)
+    price_per_kg: float = Field(gt=0)
+
+
+class MarketAcceptRequest(BaseModel):
+    """POST body for accepting an open market offer."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    offer_id: str
+    farm_id: str | None = None
+
+
+class MarketAcceptedCommitment(BaseModel):
+    """Active guaranteed transaction after offer acceptance (D4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    offer_id: str
+    farm_id: str
+    demand_point_id: str
+    crop_type: str
+    quantity_kg: float = Field(gt=0)
+    price_per_kg: float = Field(gt=0)
+    accepted_at: datetime
+
+
+EconomicsRecommendation = Literal["switch_to_direct", "stay_apmc", "direct_accepted"]
+
+
+class FarmEconomicsRow(BaseModel):
+    """Per-farm P&L comparing APMC (VRP) path vs direct buyer offer (D3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    farm_id: str
+    farm_name: str
+    crop_type: str
+    kg_at_risk: float = Field(ge=0)
+    waste_kg: float = Field(ge=0)
+    sold_kg: float = Field(ge=0)
+    apmc_price_per_kg: float = Field(ge=0)
+    apmc_revenue_inr: float = Field(ge=0)
+    apmc_logistics_inr: float = Field(ge=0)
+    apmc_spoilage_inr: float = Field(ge=0)
+    apmc_net_margin_inr: float
+    routed_demand_point_id: str | None = None
+    private_offer_per_kg: float = Field(ge=0)
+    private_buyer_name: str
+    direct_revenue_inr: float = Field(ge=0)
+    direct_logistics_inr: float = Field(ge=0)
+    direct_spoilage_inr: float = Field(ge=0)
+    direct_net_margin_inr: float
+    margin_delta_inr: float
+    recommendation: EconomicsRecommendation
+    private_demand_point_id: str
+
+
 class Truck(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -166,6 +306,7 @@ class PlanOutcome(BaseModel):
     crop_type: str | None = None
     day_of_week: str | None = None
     road_segment: str | None = None
+    season: str | None = None
 
 
 # --- API ---

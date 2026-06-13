@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from graph import PipelineRequest, PipelineResult, run_scenario
-from models.schemas import DemandPoint, Farm, Plan, Truck
+from models.schemas import DemandPoint, Farm, FarmerCommitment, BuyerDemandPost, MarketAcceptedCommitment, Plan, Truck
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -57,6 +57,9 @@ class RunScenarioRequest(BaseModel):
     farms: list[Farm]
     demand_points: list[_DemandPointIn]
     trucks: list[Truck]
+    farmer_commitments: list[FarmerCommitment] = Field(default_factory=list)
+    buyer_demands: list[BuyerDemandPost] = Field(default_factory=list)
+    market_commitments: list[MarketAcceptedCommitment] = Field(default_factory=list)
 
 
 class RunScenarioResponse(BaseModel):
@@ -75,6 +78,7 @@ class RunScenarioResponse(BaseModel):
     approval_status: str = "pending"
     approved_at: str | None = None
     notifications_dispatched_at: str | None = None
+    calendar_alert: dict | None = None
 
 
 def _validate_scenario_inputs(body: RunScenarioRequest) -> None:
@@ -100,6 +104,9 @@ async def run_scenario_endpoint(body: RunScenarioRequest) -> RunScenarioResponse
             demand_points=[dp.to_schema() for dp in body.demand_points],
             trucks=body.trucks,
             scenario_type=body.scenario_type,
+            farmer_commitments=body.farmer_commitments,
+            buyer_demands=body.buyer_demands,
+            market_commitments=body.market_commitments,
         )
         result: PipelineResult = await run_scenario(req)
         from tools.db import get_plan_by_run_id
@@ -121,6 +128,7 @@ async def run_scenario_endpoint(body: RunScenarioRequest) -> RunScenarioResponse
             approval_status=approval["approval_status"],
             approved_at=approval["approved_at"],
             notifications_dispatched_at=approval["notifications_dispatched_at"],
+            calendar_alert=result.calendar_alert,
         )
     except Exception as exc:
         logger.exception("POST /api/scenario/run failed")
