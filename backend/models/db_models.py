@@ -81,6 +81,28 @@ class TruckRow(Base):
     driver_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
+class UserRow(Base):
+    """Phone-first identity for OTP/JWT auth (T1).
+
+    ``entity_id`` ties the login to its domain object — a farm id for
+    farmers, truck id for drivers, demand-point id for mandis; NULL for
+    FPO operators who oversee everything.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=_uuidpk,
+    )
+    phone: Mapped[str] = mapped_column(String(20), unique=True, index=True, nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
+
+
 class PlanTable(Base):
     __tablename__ = "plans"
 

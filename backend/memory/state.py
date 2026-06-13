@@ -45,6 +45,10 @@ class AgentFarmState(TypedDict, total=False):
     farmer_commitments: NotRequired[list[FarmerCommitment]]
     buyer_demands: NotRequired[list[BuyerDemandPost]]
     market_commitments: NotRequired[list[MarketAcceptedCommitment]]
+    # R4: road legs reported blocked; logistics penalizes the matching
+    # distance-matrix cells so the solver routes around them.
+    # Each: {"from": [lat, lng], "to": [lat, lng], "penalty": float}
+    blocked_segments: NotRequired[list[dict]]
 
     # Weather agent
     weather_events: list[WeatherEvent]

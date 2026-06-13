@@ -75,6 +75,11 @@ export const DEMO_DEMAND_POINTS = [
   { id: 'dp-apmc-04', name: 'Nashik Wholesale APMC',         lat: 19.9975, lng: 73.7898, point_type: 'apmc',    base_demand_per_day: 1900 },
   { id: 'dp-apmc-05', name: 'Solapur Tomato Auction APMC',   lat: 17.6599, lng: 75.9064, point_type: 'apmc',    base_demand_per_day: 1500 },
   { id: 'dp-apmc-06', name: 'Sangli Turmeric & Veg APMC',   lat: 16.8524, lng: 74.5815, point_type: 'apmc',    base_demand_per_day: 1300 },
+  // Cover north-east Karnataka (Raichur/Bellary) and the Malnad belt
+  // (Chikmagalur/Shivamogga) — without these, four demo farms sit >150 km
+  // from every mandi and can never be routed (APMC radius constraint).
+  { id: 'dp-apmc-07', name: 'Raichur APMC Yard',             lat: 16.2120, lng: 77.3439, point_type: 'apmc',    base_demand_per_day: 1200 },
+  { id: 'dp-apmc-08', name: 'Davanagere APMC Market',        lat: 14.4644, lng: 75.9218, point_type: 'apmc',    base_demand_per_day: 1500 },
   // Private Distribution Centres
   { id: 'dp-priv-01', name: 'Reliance Fresh DC Pune',        lat: 18.5018, lng: 73.8745, point_type: 'private', base_demand_per_day: 1200 },
   { id: 'dp-priv-02', name: 'Metro Cash Nashik Ring Road',   lat: 19.9403, lng: 73.8341, point_type: 'private', base_demand_per_day: 1000 },

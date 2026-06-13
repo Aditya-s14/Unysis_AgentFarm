@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import math
 from typing import Any
@@ -277,3 +278,154 @@ async def get_distance_matrix(
         n_o, n_d, n_o * n_d,
     )
     return out
+
+
+# --- Road geometry (T7) -----------------------------------------------------
+#
+# Returns the road-snapped polyline through an ordered list of waypoints, as
+# [[lat, lng], ...] ready for Leaflet. Provider order mirrors the distance
+# matrix (ORS → OSRM); on total failure returns None and the frontend draws
+# straight stop-to-stop lines, which is the pre-T7 behaviour.
+
+GEOM_CACHE_PREFIX = "geom:"
+GEOM_CACHE_TTL_S = 3600
+ORS_GEOJSON_URL = "https://api.openrouteservice.org/v2/directions/driving-car/geojson"
+# Waypoints outside a provider's coverage get silently snapped to the nearest
+# road in its graph (e.g. Delhi coords snap ~600 km away on a south-India OSRM
+# extract) while still returning code=Ok. Reject geometry whose endpoints land
+# further than this from the requested endpoints.
+_SNAP_TOLERANCE_KM = 15.0
+
+
+def _plausible_geometry(
+    geometry: list[list[float]] | None,
+    points: list[tuple[float, float]],
+) -> bool:
+    """True when geometry endpoints land near the requested endpoints."""
+    if not geometry or len(geometry) < 2:
+        return False
+    start_ok = haversine_km((geometry[0][0], geometry[0][1]), points[0]) <= _SNAP_TOLERANCE_KM
+    end_ok = haversine_km((geometry[-1][0], geometry[-1][1]), points[-1]) <= _SNAP_TOLERANCE_KM
+    return start_ok and end_ok
+
+
+def _geometry_cache_key(points: list[tuple[float, float]]) -> str:
+    """Stable key for an ORDERED waypoint sequence (direction matters)."""
+    joined = "|".join(f"{p[0]:.6f},{p[1]:.6f}" for p in points)
+    h = hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
+    return f"{GEOM_CACHE_PREFIX}{h}"
+
+
+def _flip_lnglat(coords: list[list[float]]) -> list[list[float]]:
+    """GeoJSON is [lng, lat]; Leaflet wants [lat, lng]."""
+    return [[float(c[1]), float(c[0])] for c in coords if len(c) >= 2]
+
+
+async def _ors_route_geometry(
+    client: httpx.AsyncClient,
+    api_key: str,
+    points: list[tuple[float, float]],
+) -> list[list[float]] | None:
+    payload = {
+        "coordinates": [[p[1], p[0]] for p in points],
+        "instructions": False,
+        "geometry_simplify": True,
+    }
+    headers = {
+        "Authorization": api_key,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    try:
+        resp = await client.post(
+            ORS_GEOJSON_URL, json=payload, headers=headers, timeout=20.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        features = data.get("features") or []
+        if not features:
+            return None
+        coords = features[0].get("geometry", {}).get("coordinates") or []
+        return _flip_lnglat(coords) if len(coords) >= 2 else None
+    except Exception as exc:
+        logger.warning("ORS geometry failed: %r", exc)
+        return None
+
+
+async def _osrm_route_geometry(
+    client: httpx.AsyncClient,
+    base_url: str,
+    points: list[tuple[float, float]],
+) -> list[list[float]] | None:
+    coords = ";".join(f"{p[1]},{p[0]}" for p in points)
+    url = f"{base_url.rstrip('/')}{OSRM_ROUTE_PATH}/{coords}"
+    params = {"overview": "simplified", "geometries": "geojson"}
+    try:
+        resp = await client.get(url, params=params, timeout=15.0)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("code") != "Ok":
+            logger.warning("OSRM geometry status %s", data.get("code"))
+            return None
+        routes = data.get("routes") or []
+        if not routes:
+            return None
+        coords_out = routes[0].get("geometry", {}).get("coordinates") or []
+        return _flip_lnglat(coords_out) if len(coords_out) >= 2 else None
+    except Exception as exc:
+        logger.warning("OSRM geometry failed: %s", exc)
+        return None
+
+
+async def get_route_geometry(
+    points: list[tuple[float, float]],
+) -> list[list[float]] | None:
+    """Road-snapped polyline [[lat, lng], ...] through ordered waypoints.
+
+    Tries OpenRouteService, then self-hosted OSRM; result cached in Redis
+    (TTL 1h). Returns None when no provider can answer — callers must treat
+    that as "fall back to straight lines", never as an error.
+    """
+    if len(points) < 2:
+        return None
+
+    settings = get_settings()
+    ors_key = (settings.ORS_API_KEY or "").strip()
+    osrm_url = (settings.OSRM_URL or "").strip()
+
+    r: redis.Redis | None = None
+    try:
+        r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+    except Exception as exc:
+        logger.debug("route geometry: Redis unavailable, skipping cache (%s)", exc)
+
+    cache_key = _geometry_cache_key(points)
+    try:
+        if r is not None:
+            raw = await r.get(cache_key)
+            if raw is not None:
+                cached = json.loads(raw)
+                return cached if cached else None
+
+        geometry: list[list[float]] | None = None
+        async with httpx.AsyncClient() as client:
+            if ors_key:
+                geometry = await _ors_route_geometry(client, ors_key, points)
+                if geometry is not None and not _plausible_geometry(geometry, points):
+                    logger.warning("ORS geometry implausible (snapped out of coverage?); discarding")
+                    geometry = None
+            if geometry is None and osrm_url:
+                geometry = await _osrm_route_geometry(client, osrm_url, points)
+                if geometry is not None and not _plausible_geometry(geometry, points):
+                    logger.warning("OSRM geometry implausible (snapped out of coverage?); discarding")
+                    geometry = None
+
+        if r is not None and geometry is not None:
+            try:
+                await r.set(cache_key, json.dumps(geometry), ex=GEOM_CACHE_TTL_S)
+            except Exception as exc:
+                logger.debug("route geometry cache set failed: %s", exc)
+        return geometry
+    finally:
+        if r is not None:
+            await r.aclose()

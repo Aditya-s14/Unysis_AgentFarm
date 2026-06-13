@@ -1,23 +1,39 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
+import { useAppContext } from '@/context/AppContext';
 
-/**
- * DashboardLayout — recovered sidebar shell shared by every operator page.
- * Glass sidebar (collapsible) + sticky glass header. The `title`/`subtitle`
- * props drive the header; page content renders inside <main>.
- */
+const ROLE_LABELS = { fpo: 'FPO Admin', farmer: 'Farmer', driver: 'Driver', mandi: 'Mandi Operator' };
+const ROLE_COLORS = {
+  fpo:    { bg: '#1e3a5f', text: '#fff' },
+  farmer: { bg: '#166534', text: '#fff' },
+  driver: { bg: '#92400e', text: '#fff' },
+  mandi:  { bg: '#581c87', text: '#fff' },
+};
+
 export default function DashboardLayout({ children, title, subtitle }) {
   const router = useRouter();
+  const { user, logout } = useAppContext();
   const [collapsed, setCollapsed] = useState(false);
 
-  const navItems = [
-    { href: '/',          label: 'Home',      icon: HomeIcon },
-    { href: '/dashboard', label: 'Dashboard', icon: GridIcon },
-    { href: '/scenario',  label: 'Scenario',  icon: BoltIcon },
-    { href: '/runs',      label: 'Runs',      icon: ActivityIcon },
-    { href: '/advisor',   label: 'Advisor',   icon: ChatIcon },
+  const handleSignOut = () => {
+    logout();
+    router.push('/login');
+  };
+
+  const ALL_NAV = [
+    { href: '/',          label: 'Home',      icon: HomeIcon,     roles: ['fpo'] },
+    { href: '/dashboard', label: 'Dashboard', icon: GridIcon,     roles: ['fpo'] },
+    { href: '/scenario',  label: 'Scenario',  icon: BoltIcon,     roles: ['fpo'] },
+    { href: '/runs',      label: 'Runs',      icon: ActivityIcon, roles: ['fpo', 'driver'] },
+    { href: '/farmer',    label: 'Farmer',    icon: LeafIcon,     roles: ['fpo', 'farmer'] },
+    { href: '/mandi',     label: 'Mandi',     icon: StoreIcon,    roles: ['fpo', 'mandi'] },
+    { href: '/advisor',   label: 'Advisor',   icon: ChatIcon,     roles: ['fpo'] },
   ];
+
+  const navItems = user
+    ? ALL_NAV.filter((item) => item.roles.includes(user.role))
+    : ALL_NAV;
 
   const width = collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
 
@@ -85,6 +101,44 @@ export default function DashboardLayout({ children, title, subtitle }) {
           })}
         </nav>
 
+        {/* user pill + sign out */}
+        {user && (
+          <div className="px-3 py-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.25)' }}>
+            {!collapsed && (
+              <div className="mb-2 px-2 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.25)' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <div
+                    className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold flex-shrink-0"
+                    style={{ background: ROLE_COLORS[user.role]?.bg || '#1e3a5f', color: '#fff' }}
+                  >
+                    {(user.name || user.phone || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold truncate" style={{ color: 'var(--navy)' }}>
+                      {user.name || user.phone}
+                    </p>
+                  </div>
+                </div>
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                  style={{ background: ROLE_COLORS[user.role]?.bg || '#1e3a5f', color: '#fff' }}
+                >
+                  {ROLE_LABELS[user.role] || user.role}
+                </span>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg transition-all"
+              style={{ color: 'var(--text-tertiary)', background: 'transparent', border: 'none', fontSize: '12px', cursor: 'pointer' }}
+            >
+              <LogoutIcon />
+              {!collapsed && <span>Sign Out</span>}
+            </button>
+          </div>
+        )}
+
         {/* collapse toggle */}
         <div className="px-3 py-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.25)' }}>
           <button
@@ -133,7 +187,15 @@ export default function DashboardLayout({ children, title, subtitle }) {
               </>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {user && (
+              <span
+                className="text-xs font-semibold px-2 py-0.5 rounded"
+                style={{ background: ROLE_COLORS[user.role]?.bg || '#1e3a5f', color: '#fff' }}
+              >
+                {user.name}
+              </span>
+            )}
             <span className="dot-live" />
             <span className="text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>
               Online
@@ -189,6 +251,32 @@ function ChatIcon() {
   return (
     <svg {...svgProps}>
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+function LeafIcon() {
+  return (
+    <svg {...svgProps}>
+      <path d="M2 22 16 8" />
+      <path d="M16 8c0-4.4-3.6-8-8-8C7 3.3 4 8 4 12c0 5.5 4.5 10 10 10 4.4 0 8-3.6 8-8 0-2.2-.9-4.3-2.3-5.8" />
+    </svg>
+  );
+}
+function StoreIcon() {
+  return (
+    <svg {...svgProps}>
+      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <path d="M16 10a4 4 0 0 1-8 0" />
+    </svg>
+  );
+}
+function LogoutIcon() {
+  return (
+    <svg {...svgProps}>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   );
 }

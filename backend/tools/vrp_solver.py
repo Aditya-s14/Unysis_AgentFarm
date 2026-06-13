@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import time
+from itertools import permutations
 
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
@@ -85,6 +86,34 @@ def _node_coord_index(
 
 
 _MAX_ROUTE_KM = 14.0 * 50.0  # legal drive limit × conservative speed (km)
+# Drop penalties (km-equivalent per unserved stop). Urgent stock costs far
+# more to abandon, so when capacity forces drops the solver sacrifices
+# comfortable farms first. Mandis are delivery anchors — never worth dropping.
+_DROP_PENALTY_URGENT_KM = 10_000.0   # <12 h to spoilage
+_DROP_PENALTY_SOON_KM = 6_000.0      # <48 h
+_DROP_PENALTY_AT_RISK_KM = 3_000.0   # flagged at-risk, >=48 h
+_DROP_PENALTY_SAFE_KM = 1_000.0      # not at risk
+_DROP_PENALTY_MANDI_KM = 10_000.0
+
+
+def _drop_penalty_km(
+    node: int,
+    farms: list[Farm],
+    at_risk_by_farm: dict[str, AtRiskStock],
+) -> float:
+    if node > len(farms):
+        return _DROP_PENALTY_MANDI_KM
+    stock = at_risk_by_farm.get(farms[node - 1].id)
+    if stock is None:
+        return _DROP_PENALTY_SAFE_KM
+    hours = stock.hours_until_spoilage
+    if hours is None:
+        return _DROP_PENALTY_AT_RISK_KM
+    if hours <= 12.0:
+        return _DROP_PENALTY_URGENT_KM
+    if hours <= 48.0:
+        return _DROP_PENALTY_SOON_KM
+    return _DROP_PENALTY_AT_RISK_KM
 
 
 def _try_ortools(
@@ -94,6 +123,7 @@ def _try_ortools(
     time_limit_s: int,
     farms: list[Farm],
     demand_points: list[DemandPoint],
+    at_risk_stock: list[AtRiskStock] | None = None,
 ) -> RoutePlan | None:
     n = len(distance_matrix_km)
     if n < 2 or len(trucks) == 0:
@@ -138,6 +168,17 @@ def _try_ortools(
         True,
         "Distance",
     )
+
+    # Without disjunctions, CVRP demands full coverage: whenever regional
+    # demand exceeds allocated capacity (or the drive cap), the model is
+    # infeasible, OR-Tools returns nothing, and the cap-less greedy fallback
+    # produces illegal 18h+ routes. Urgency-weighted drop penalties keep
+    # coverage the overwhelming priority — and make the solver sacrifice
+    # comfortable farms first when capacity genuinely runs out.
+    at_risk_by_farm = {s.farm_id: s for s in (at_risk_stock or [])}
+    for node in range(1, n):
+        penalty_m = int(_drop_penalty_km(node, farms, at_risk_by_farm) * 1000)
+        routing.AddDisjunction([manager.NodeToIndex(node)], penalty_m)
 
     params = pywrapcp.DefaultRoutingSearchParameters()
     params.first_solution_strategy = (
@@ -274,6 +315,141 @@ def _greedy_route_plan(
     )
 
 
+def _stop_matrix_index(
+    stop: RouteStop,
+    farms: list[Farm],
+    demand_points: list[DemandPoint],
+) -> int | None:
+    """Map a RouteStop back to its distance-matrix index (depot = 0)."""
+    if stop.demand_point_id is None:
+        for i, f in enumerate(farms):
+            if f.id == stop.label:
+                return 1 + i
+        return None
+    for j, d in enumerate(demand_points):
+        if d.id == stop.demand_point_id:
+            return 1 + len(farms) + j
+    return None
+
+
+# Brute-force ordering is exact and cheap for small groups: capped at
+# 6! x 4! = 17,280 candidate sequences per route.
+_MAX_BRUTE_FARMS = 6
+_MAX_BRUTE_MANDIS = 4
+
+
+def _path_km(
+    order: tuple[int, ...] | list[int],
+    distance_matrix_km: list[list[float]],
+) -> float:
+    prev = 0
+    dist = 0.0
+    for idx in order:
+        dist += distance_matrix_km[prev][idx]
+        prev = idx
+    return dist
+
+
+def _nn_order(
+    indices: list[int],
+    start: int,
+    distance_matrix_km: list[list[float]],
+) -> list[int]:
+    """Nearest-neighbor chain through ``indices`` beginning at ``start``."""
+    remaining = list(indices)
+    out: list[int] = []
+    cur = start
+    while remaining:
+        nxt = min(remaining, key=lambda i: distance_matrix_km[cur][i])
+        remaining.remove(nxt)
+        out.append(nxt)
+        cur = nxt
+    return out
+
+
+def _best_partitioned_order(
+    farm_idx: list[int],
+    mandi_idx: list[int],
+    distance_matrix_km: list[list[float]],
+) -> list[int]:
+    """Cheapest depot->farms->mandis sequence honoring the partition.
+
+    Exact (brute force over both groups' permutations) when small enough,
+    nearest-neighbor otherwise.
+    """
+    if (
+        len(farm_idx) <= _MAX_BRUTE_FARMS
+        and len(mandi_idx) <= _MAX_BRUTE_MANDIS
+    ):
+        best: list[int] | None = None
+        best_km = float("inf")
+        for fp in permutations(farm_idx):
+            base_km = _path_km(fp, distance_matrix_km)
+            if base_km >= best_km:
+                continue
+            for mp in permutations(mandi_idx):
+                km = base_km
+                prev = fp[-1] if fp else 0
+                for idx in mp:
+                    km += distance_matrix_km[prev][idx]
+                    prev = idx
+                if km < best_km:
+                    best_km = km
+                    best = list(fp) + list(mp)
+        if best is not None:
+            return best
+
+    farms_part = _nn_order(farm_idx, 0, distance_matrix_km)
+    start = farms_part[-1] if farms_part else 0
+    return farms_part + _nn_order(mandi_idx, start, distance_matrix_km)
+
+
+def _reorder_pickups_first(
+    plan: RoutePlan,
+    farms: list[Farm],
+    demand_points: list[DemandPoint],
+    distance_matrix_km: list[list[float]],
+) -> RoutePlan:
+    """Enforce farm pickups before mandi deliveries within each route.
+
+    The CVRP models mandis as positive demand (capacity sizing), so the
+    solver has no notion of pickup -> delivery direction and may interleave
+    or even start a route at a mandi. Physically a truck must collect
+    produce before it can deliver, so each route is re-sequenced to the
+    cheapest farms-first-then-mandis order (exact for small routes, NN
+    heuristic above the brute-force cap) and distance_km is recomputed.
+    Truck <-> stop assignments are untouched.
+    """
+    total_km = 0.0
+    for route in plan.routes:
+        stops = sorted(route.stops, key=lambda s: s.sequence)
+        by_idx: dict[int, RouteStop] = {}
+        resolvable = True
+        for s in stops:
+            idx = _stop_matrix_index(s, farms, demand_points)
+            if idx is None:
+                resolvable = False
+                break
+            by_idx[idx] = s
+
+        if resolvable and len(by_idx) == len(stops) and stops:
+            farm_idx = [i for i, s in by_idx.items() if s.demand_point_id is None]
+            mandi_idx = [i for i, s in by_idx.items() if s.demand_point_id is not None]
+            order = _best_partitioned_order(farm_idx, mandi_idx, distance_matrix_km)
+            new_stops = [by_idx[i] for i in order]
+            for seq, s in enumerate(new_stops):
+                s.sequence = seq
+            route.stops = new_stops
+            route.distance_km = round(max(0.0, _path_km(order, distance_matrix_km)), 3)
+
+        if route.distance_km:
+            total_km += route.distance_km
+
+    if plan.objective_value is not None and total_km:
+        plan.objective_value = round(total_km, 3)
+    return plan
+
+
 def solve_vrp(
     farms: list[Farm],
     demand_points: list[DemandPoint],
@@ -315,15 +491,17 @@ def solve_vrp(
         tl,
         farms,
         demand_points,
+        at_risk_stock,
     )
     if plan is not None and any(r.stops for r in plan.routes):
-        return plan
+        return _reorder_pickups_first(plan, farms, demand_points, distance_matrix)
 
     logger.warning("OR-Tools returned no usable plan; using greedy fallback")
-    return _greedy_route_plan(
+    plan = _greedy_route_plan(
         distance_matrix,
         demands,
         trucks,
         farms,
         demand_points,
     )
+    return _reorder_pickups_first(plan, farms, demand_points, distance_matrix)

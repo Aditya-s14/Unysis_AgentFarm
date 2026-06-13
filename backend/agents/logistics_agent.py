@@ -27,10 +27,9 @@ from datetime import datetime, timezone
 from config import get_settings
 from memory.outcome_store import get_route_history
 from memory.state import AgentFarmState, AgentTrace
-from models.schemas import BuyerDemandPost, MarketAcceptedCommitment, Route, RoutePlan
+from models.schemas import BuyerDemandPost, MarketAcceptedCommitment, Route, RoutePlan, WeatherEvent
 from tools.market_routing import ensure_guaranteed_routes, order_dps_market_first
-from tools.maps_api import get_distance_matrix
-from models.schemas import WeatherEvent
+from tools.maps_api import get_distance_matrix, get_route_geometry
 from tools.scenario_effects import (
     HEAT,
     LIVE,
@@ -248,6 +247,43 @@ def _geo_regions(
     return regions or [(farms, _order_dps_market_first(demand_points, buyer_demands, market_commitments))]
 
 
+_BLOCK_MATCH_EPS = 1e-4  # ~11 m — stop coords round-trip JSON exactly, this is slack
+_DEFAULT_BLOCK_PENALTY = 5.0
+
+
+def _apply_blocked_segments(
+    matrix: list[list[float]],
+    coords: list[tuple[float, float]],
+    blocked_segments: list[dict],
+) -> int:
+    """Inflate matrix cells for reported-blocked legs (R4). Returns cells hit.
+
+    A segment matches a (from, to) coordinate pair within _BLOCK_MATCH_EPS;
+    both directions are penalized so the solver routes around the leg
+    rather than reversing it.
+    """
+
+    def _near(p: tuple[float, float], q) -> bool:
+        return abs(p[0] - float(q[0])) <= _BLOCK_MATCH_EPS and abs(p[1] - float(q[1])) <= _BLOCK_MATCH_EPS
+
+    hits = 0
+    for seg in blocked_segments:
+        frm, to = seg.get("from"), seg.get("to")
+        if not frm or not to:
+            continue
+        penalty = float(seg.get("penalty") or _DEFAULT_BLOCK_PENALTY)
+        from_idx = [i for i, c in enumerate(coords) if _near(c, frm)]
+        to_idx = [j for j, c in enumerate(coords) if _near(c, to)]
+        for i in from_idx:
+            for j in to_idx:
+                if i == j:
+                    continue
+                matrix[i][j] *= penalty
+                matrix[j][i] *= penalty
+                hits += 2
+    return hits
+
+
 async def _solve_region(
     region_farms: list,
     region_dps: list,
@@ -259,6 +295,7 @@ async def _solve_region(
     event_by_farm: dict[str, WeatherEvent] | None = None,
     buyer_demands: list[BuyerDemandPost] | None = None,
     market_commitments: list[MarketAcceptedCommitment] | None = None,
+    blocked_segments: list[dict] | None = None,
 ) -> RoutePlan:
     dep_lat = sum(f.lat for f in region_farms) / len(region_farms)
     dep_lng = sum(f.lng for f in region_farms) / len(region_farms)
@@ -270,6 +307,14 @@ async def _solve_region(
     matrix = await get_distance_matrix(coords, coords)
     if abs(time_factor - 1.0) > 0.01:
         matrix = [[cell * time_factor for cell in row] for row in matrix]
+
+    if blocked_segments:
+        hit = _apply_blocked_segments(matrix, coords, blocked_segments)
+        if hit:
+            logger.info(
+                "logistics_agent: penalized %d matrix cells for %d blocked segment(s)",
+                hit, len(blocked_segments),
+            )
 
     st = normalize_scenario_type(scenario_type)
     if st == LIVE and event_by_farm:
@@ -297,6 +342,26 @@ async def _solve_region(
         buyer_demands=buyer_demands,
         market_commitments=market_commitments,
     )
+
+
+async def _attach_geometry(routes: list[Route]) -> None:
+    """Fill route.geometry with the road-snapped polyline (T7).
+
+    One directions call per non-empty route, run concurrently. Any failure
+    leaves geometry=None so the map falls back to straight stop-to-stop
+    lines — geometry is presentation, never a reason to fail a plan.
+    """
+
+    async def _one(route: Route) -> None:
+        if len(route.stops) < 2:
+            return
+        points = [(s.lat, s.lng) for s in route.stops]
+        try:
+            route.geometry = await get_route_geometry(points)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("route geometry unavailable for %s: %s", route.truck_id, exc)
+
+    await asyncio.gather(*(_one(r) for r in routes))
 
 
 async def run(state: AgentFarmState) -> AgentFarmState:
@@ -342,6 +407,7 @@ async def run(state: AgentFarmState) -> AgentFarmState:
     market_commitments: list[MarketAcceptedCommitment] = list(
         state.get("market_commitments") or [],
     )
+    blocked_segments = state.get("blocked_segments") or []
     regions = _geo_regions(
         farms, demand_points, num_trucks=len(trucks),
         buyer_demands=buyer_demands,
@@ -359,6 +425,7 @@ async def run(state: AgentFarmState) -> AgentFarmState:
                 demand_scale, time_factor, scenario_type, event_by_farm,
                 buyer_demands=buyer_demands,
                 market_commitments=market_commitments,
+                blocked_segments=blocked_segments,
             )
         )
     region_plans = await asyncio.gather(*tasks)
@@ -371,6 +438,8 @@ async def run(state: AgentFarmState) -> AgentFarmState:
         if region_plan.objective_value:
             objective_total += region_plan.objective_value
         notes_parts.append(f"{len(region_farms)}f/{len(region_dps)}dp→{len(region_plan.routes)}r")
+
+    await _attach_geometry(merged_routes)
 
     plan = RoutePlan(
         routes=merged_routes,

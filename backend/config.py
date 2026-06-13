@@ -31,6 +31,21 @@ class Settings(BaseSettings):
     # Directory containing sample_*.csv (repo root `data/`). In Docker set e.g. /seed-data.
     DATA_SEED_DIR: str = ""
 
+    # --- Auth (T1) ---
+    # HS256 signing secret for JWTs. The default is fine for local dev only;
+    # set a real value in .env for anything shared.
+    JWT_SECRET: str = "dev-secret-change-me"
+    JWT_TTL_HOURS: int = 24
+    OTP_TTL_SECONDS: int = 300
+    # OTP delivery channel. Only "mock" is implemented (logs the code and
+    # echoes it as dev_otp); swap in an SMS provider class without touching
+    # the auth flow.
+    OTP_PROVIDER: str = "mock"
+    # Gate enforcement on the pre-existing API (scenario/runs/advisor) so
+    # teammates' work is not blocked mid-sprint. Auth endpoints themselves
+    # are always live. Flip to true at integration time.
+    AUTH_ENABLED: bool = False
+
     vrp_time_limit: int = 30
     max_retries: int = 2
     planning_temp: float = 0.0

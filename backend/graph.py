@@ -295,6 +295,8 @@ class PipelineRequest:
     farmer_commitments: list[FarmerCommitment] = field(default_factory=list)
     buyer_demands: list[BuyerDemandPost] = field(default_factory=list)
     market_commitments: list[MarketAcceptedCommitment] = field(default_factory=list)
+    # R4: legs to penalize, [{"from": [lat,lng], "to": [lat,lng], "penalty": float}]
+    blocked_segments: list[dict] | None = None
 
 
 @dataclass
@@ -352,6 +354,8 @@ async def run_scenario(request: PipelineRequest) -> PipelineResult:
             )
             seen_farms.add(mc.farm_id)
         state["farmer_commitments"] = existing_fc
+    if request.blocked_segments:
+        state["blocked_segments"] = request.blocked_segments
 
     logger.info("run_scenario start run_id=%s scenario=%s", run_id, request.scenario_type)
     result: AgentFarmState = await compiled_graph.ainvoke(state)
