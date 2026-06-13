@@ -1,0 +1,21 @@
+id,name,lat,lng,crop_type,acreage,typical_yield_kg,harvest_window_start,harvest_window_end,state,phone,preferred_language,notify_channel,notify_opt_in
+farm-001,Nandi Valley Tomatoes,13.0827,77.5439,tomato,8.4,1200,2026-06-15,2026-07-30,Karnataka,+919900000001,en,both,true
+farm-002,Tumkur Organic Tomato Coop,13.3409,77.1011,tomato,11.2,1800,2026-06-12,2026-07-25,Karnataka,+919900000002,en,both,true
+farm-003,Raichur Table Tomato Estate,16.2076,77.3463,tomato,6.8,4000,2026-06-26,2026-08-30,Karnataka,+919900000003,hi,both,true
+farm-004,Chikkaballapur Cherry Tomatoes,13.4322,77.7275,tomato,9.1,1500,2026-06-18,2026-08-01,Karnataka,+919900000004,en,both,true
+farm-005,Bellary Tomato Farmers Union,15.1394,76.9214,tomato,14.0,4000,2026-06-26,2026-08-30,Karnataka,+919900000005,en,both,true
+farm-006,Nasik Hills Onion Growers,19.9975,73.7898,onion,10.5,900,2026-06-14,2026-07-15,Maharashtra,+919900000006,en,both,true
+farm-007,Solapur Red Onion Collective,17.6599,75.9064,onion,18.3,4000,2026-06-26,2026-08-30,Maharashtra,+919900000007,en,both,true
+farm-008,Sangli Onion Cooperatives,16.8524,74.5815,onion,12.7,4000,2026-06-26,2026-08-30,Maharashtra,+919900000008,en,both,true
+farm-009,Dhule Onion Plains,20.9042,74.7778,onion,9.4,4000,2026-06-26,2026-08-30,Maharashtra,+919900000009,en,both,true
+farm-010,Pune Plateau Onions,18.5204,73.8567,onion,7.2,4000,2026-06-26,2026-08-30,Maharashtra,+919900000010,en,both,true
+farm-011,Chikmagalur Robusta Banana,13.3161,75.7720,banana,15.6,700,2026-06-16,2026-09-30,Karnataka,+919900000011,en,both,true
+farm-012,Coastal Karwar Cavendish,14.8136,74.1286,banana,22.1,4000,2026-06-26,2026-08-30,Karnataka,+919900000012,en,both,true
+farm-013,Mysore Nendran Banana Trust,12.2958,76.6394,banana,11.0,4000,2026-06-26,2026-08-30,Karnataka,+919900000013,en,both,true
+farm-014,Shivamogga Hill Plantains,13.9299,75.5681,banana,13.8,850,2026-05-12,2026-09-05,Karnataka,+919900000014,en,both,true
+farm-015,Haveri Grand Naine,14.8006,75.3910,banana,19.4,1000,2026-04-28,2026-08-28,Karnataka,+919900000015,en,both,true
+farm-016,Ratnagiri Alphonso Grove,16.9902,73.3120,mango,25.0,750,2026-06-13,2026-07-30,Maharashtra,+919900000016,en,both,true
+farm-017,Devgad Mango Estates,16.3869,73.3984,mango,30.5,900,2026-06-19,2026-08-15,Maharashtra,+919900000017,en,both,true
+farm-018,Belgaum Kesar Block,15.8497,74.4977,mango,18.2,500,2026-03-25,2026-06-20,Maharashtra,+919900000018,en,both,true
+farm-019,Dharwad Banganapalli Farms,15.4589,75.0078,mango,12.3,400,2026-04-05,2026-06-25,Karnataka,+919900000019,en,both,true
+farm-020,Bijapur Mango Collective,16.8244,75.7154,mango,21.7,650,2026-03-30,2026-07-10,Karnataka,+919900000020,en,both,true

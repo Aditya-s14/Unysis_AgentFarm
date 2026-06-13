@@ -12,8 +12,8 @@ import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.main import create_app
-from src.models.database import Base
+from main import app as fastapi_app
+from models.db_models import Base
 
 
 @pytest.fixture(scope="session")
@@ -54,8 +54,7 @@ def mock_redis() -> AsyncMock:
 def client() -> Iterator[TestClient]:
     """FastAPI ``TestClient`` for route-level tests."""
 
-    app = create_app()
-    with TestClient(app) as c:
+    with TestClient(fastapi_app) as c:
         yield c
 
 

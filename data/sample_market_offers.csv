@@ -1,0 +1,5 @@
+id,side,role,farm_id,buyer_name,demand_point_id,crop_type,quantity_kg,price_per_kg,status
+market-ask-dp-priv-01-tomato-seed001,ask,farmer,farm-001,,dp-priv-01,tomato,800,22,accepted
+market-ask-dp-priv-02-onion-seed002,ask,farmer,farm-006,,dp-priv-02,onion,600,18,open
+market-bid-dp-priv-03-banana-seed003,bid,buyer,,Export Hub Hubli,dp-priv-03,banana,500,19,open
+market-bid-dp-priv-01-tomato-seed004,bid,buyer,,Taj West End Kitchen,dp-priv-01,tomato,750,20,open

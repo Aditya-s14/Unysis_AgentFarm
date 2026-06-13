@@ -1,64 +1,132 @@
-import { useState } from 'react';
+import { useRouter } from 'next/router';
 import ScenarioTypeSelect from './ScenarioTypeSelect';
 import useScenario from '@/hooks/useScenario';
+import { getBuyerDemandsForApi } from '@/hooks/useBuyerDemands';
+import { getMarketCommitmentsForApi } from '@/hooks/useMarketOffers';
 import { useAppContext } from '@/context/AppContext';
+import {
+  DEMO_FARMS,
+  DEMO_DEMAND_POINTS,
+  DEMO_TRUCKS,
+} from '@/utils/demoFixtures';
 
 /**
- * ScenarioForm — lets the user pick a disruption template, optionally upload
- * CSVs for farms/demand/trucks, and kick off the backend pipeline.
+ * ScenarioForm — pick a disruption template and run the backend pipeline.
+ *
+ * Demo fixture: 20 farms (Karnataka + Maharashtra), 10 mandis, 10 trucks.
  */
-export default function ScenarioForm({ onComplete }) {
+export default function ScenarioForm({ onRunStart, onComplete, onError }) {
+  const router = useRouter();
   const { scenarioDraft, setScenarioDraft, setCurrentRunId } = useAppContext();
   const { run, loading, error } = useScenario();
-  const [csvFile, setCsvFile] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // TODO: parse CSV client-side or upload to backend; for now we send an
-    // empty body and let the backend use seed data.
+    onRunStart?.(scenarioDraft.scenarioType);
+    const buyer_demands = getBuyerDemandsForApi();
+    const market_commitments = getMarketCommitmentsForApi();
     const body = {
-      scenarioType: scenarioDraft.scenarioType,
-      farms: scenarioDraft.farms,
-      demandPoints: scenarioDraft.demandPoints,
-      trucks: scenarioDraft.trucks,
-      constraints: scenarioDraft.constraints,
+      scenario_type: scenarioDraft.scenarioType,
+      farms: DEMO_FARMS,
+      demand_points: DEMO_DEMAND_POINTS,
+      trucks: DEMO_TRUCKS,
+      farmer_commitments: [],
+      buyer_demands,
+      market_commitments,
     };
     try {
       const result = await run(body);
-      if (result?.runId) {
-        setCurrentRunId(result.runId);
+      if (!result?.run_id) {
+        throw new Error('Pipeline completed without a run_id — check backend logs');
       }
-      onComplete?.(result);
-    } catch {
-      // error captured inside the hook
+      setCurrentRunId(result.run_id);
+      const scenarioResult = {
+        ...result,
+        scenario_type: body.scenario_type,
+        farms: body.farms,
+        demand_points: body.demand_points,
+        farmer_commitments: [],
+        buyer_demands,
+        market_commitments,
+      };
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(
+            'agentfarm_last_response',
+            JSON.stringify(scenarioResult),
+          );
+        } catch {
+          /* localStorage full / disabled — non-fatal */
+        }
+      }
+      if (typeof onComplete === 'function') {
+        onComplete(scenarioResult);
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (err) {
+      onError?.(err);
     }
   };
+
+  const totalCapacity = DEMO_TRUCKS.reduce((s, t) => s + t.capacity_kg, 0);
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm space-y-4"
+      className="bg-card p-6 space-y-6"
+      style={{
+        border: '1px solid var(--border)',
+        borderRadius: '4px',
+      }}
     >
       <ScenarioTypeSelect
         value={scenarioDraft.scenarioType}
         onChange={(val) => setScenarioDraft({ ...scenarioDraft, scenarioType: val })}
       />
 
-      <div>
-        <span className="text-sm font-medium text-gray-700">Upload CSV (farms / demand / trucks)</span>
-        <input
-          type="file"
-          accept=".csv"
-          onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-          className="mt-1 block w-full text-sm text-gray-600"
-        />
-        <p className="mt-1 text-xs text-gray-500">
-          {csvFile ? `Selected: ${csvFile.name}` : 'Optional — leave blank to use seed data (TODO: wire to backend).'}
+      <div
+        className="p-4"
+        style={{
+          background: 'rgba(245, 166, 35, 0.03)',
+          border: '1px solid var(--border)',
+          borderRadius: '4px',
+        }}
+      >
+        <p
+          className="font-mono uppercase mb-2"
+          style={{
+            color: 'var(--accent)',
+            fontSize: '0.65rem',
+            letterSpacing: '0.15em',
+          }}
+        >
+          ▸ Demo Fixture
+        </p>
+        <p className="font-mono text-paper text-[12px] leading-relaxed">
+          <span className="text-accent">{DEMO_FARMS.length}</span>{' '}
+          <span className="text-muted">farms (Karnataka + Maharashtra)</span>{' '}
+          ·{' '}
+          <span className="text-accent">{DEMO_DEMAND_POINTS.length}</span>{' '}
+          <span className="text-muted">mandis</span>{' '}
+          ·{' '}
+          <span className="text-accent">{DEMO_TRUCKS.length}</span>{' '}
+          <span className="text-muted">
+            trucks ({totalCapacity.toLocaleString()} kg total capacity)
+          </span>
         </p>
       </div>
 
       {error && (
-        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">
+        <div
+          className="font-mono text-[12px] p-3"
+          style={{
+            color: 'var(--red-risk)',
+            border: '1px solid var(--red-risk)',
+            background: 'rgba(255, 68, 68, 0.05)',
+            borderRadius: '2px',
+          }}
+        >
           {error}
         </div>
       )}
@@ -66,9 +134,17 @@ export default function ScenarioForm({ onComplete }) {
       <button
         type="submit"
         disabled={loading}
-        className="w-full px-4 py-2 rounded-md bg-agri-green text-white font-medium hover:bg-agri-green-dark transition disabled:opacity-60"
+        className="w-full py-3 font-mono uppercase tracking-wider-2 transition disabled:opacity-50"
+        style={{
+          background: 'var(--accent)',
+          color: '#0D1F0F',
+          fontSize: '12px',
+          fontWeight: 600,
+          borderRadius: '2px',
+          letterSpacing: '0.15em',
+        }}
       >
-        {loading ? 'Running pipeline...' : 'Run Scenario'}
+        {loading ? '◦ Running pipeline…' : 'Run Scenario →'}
       </button>
     </form>
   );

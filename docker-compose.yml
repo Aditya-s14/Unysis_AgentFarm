@@ -1,8 +1,6 @@
-version: "3.9"
-
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16
     container_name: agentfarm_postgres
     restart: unless-stopped
     environment:
@@ -22,7 +20,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: redis:7
     container_name: agentfarm_redis
     restart: unless-stopped
     ports:
@@ -37,6 +35,29 @@ services:
       timeout: 3s
       retries: 10
 
+  osrm:
+    # Optional self-hosted road routing. By default this branch uses hosted
+    # OpenRouteService (ORS_API_KEY in .env) and does NOT start OSRM.
+    #
+    # To self-host OSRM instead: prep the map data via
+    # scripts/prepare-osrm.{ps1,sh}, then start with:
+    #   docker compose --profile self-host up -d
+    profiles: ["self-host"]
+    image: osrm/osrm-backend:latest
+    container_name: agentfarm_osrm
+    restart: unless-stopped
+    command: osrm-routed --algorithm mld /data/india-south-west.osrm
+    volumes:
+      - osrm_data:/data
+    networks:
+      - agentfarm_net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/5000"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   backend:
     build:
       context: ./backend
@@ -45,8 +66,19 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    # .env brings in API keys (OPENAI_API_KEY, OPENAI_BASE_URL,
+    # GOOGLE_MAPS_API_KEY, OPENWEATHER_API_KEY).  The explicit ``environment``
+    # block below overrides the connection strings so they point at the
+    # docker network hostnames instead of localhost.
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentfarm:agentfarm@postgres:5432/agentfarm
+      REDIS_URL: redis://redis:6379/0
+      # OSRM_URL only matters if you started the optional `osrm` service via
+      # `docker compose --profile self-host up -d`. Otherwise harmlessly unused.
+      OSRM_URL: http://osrm:5000
+      VRP_TIME_LIMIT: 5
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,6 +86,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
+      - ./data:/app/data:ro
     networks:
       - agentfarm_net
 
@@ -79,3 +112,8 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  osrm_data:
+    # Only needed when running `docker compose --profile self-host up -d`.
+    # Created and populated by scripts/prepare-osrm.{ps1,sh}.
+    external: true
+    name: osrm_data
