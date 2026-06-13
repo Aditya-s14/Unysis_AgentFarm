@@ -11,6 +11,7 @@ import FpoApprovalPanel from '@/components/Dashboard/FpoApprovalPanel';
 import TruckGapAlertPanel from '@/components/Dashboard/TruckGapAlertPanel';
 import PriceDiscoveryBoard from '@/components/Farmer/PriceDiscoveryBoard';
 import FarmEconomicsPanel from '@/components/Farmer/FarmEconomicsPanel';
+import FarmerCommitmentPanel from '@/components/Farmer/FarmerCommitmentPanel';
 import BuyerDemandPanel from '@/components/Buyer/BuyerDemandPanel';
 import OfferLedgerPanel from '@/components/Market/OfferLedgerPanel';
 import BuyerRoutePriorityBanner from '@/components/Buyer/BuyerRoutePriorityBanner';
@@ -581,7 +582,6 @@ function DashboardPage() {
             {/* ---- OVERVIEW tab -------------------------------------------------------------------------------------- */}
             {activeTab === 'overview' && (
               <>
-                <BuyerRoutePriorityBanner plan={cached?.plan} />
                 {runId && notificationsDispatched && deviationAlerts.length > 0 && (
                   <div className="mt-6">
                     <DeviationAlertPanel alerts={deviationAlerts} />
@@ -633,12 +633,17 @@ function DashboardPage() {
                     </div>
                   </SectionCard>
                 </section>
+
+                <div className="mt-6">
+                  <BuyerRoutePriorityBanner plan={cached?.plan} />
+                </div>
               </>
             )}
 
             {/* ---- FARMER tab ------------------------------------------------------------------------------------------ */}
             {activeTab === 'farmer' && (
               <section className="mt-6 space-y-4">
+                <FarmerCommitmentPanel />
                 <PriceDiscoveryBoard />
                 <FarmEconomicsPanel />
 

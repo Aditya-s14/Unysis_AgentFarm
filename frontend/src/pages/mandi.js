@@ -2,11 +2,14 @@
 import { useCallback, useMemo, useState } from 'react';
 // useRouter removed â€” entity_id comes from AuthContext, not URL param
 import DashboardLayout from '@/components/Dashboard/DashboardLayout';
+import MandiFulfilmentCard from '@/components/Mandi/MandiFulfilmentCard';
+import DeliveryOutcomeModal from '@/components/Mandi/DeliveryOutcomeModal';
 import { postMandiConfirm } from '@/api/client';
 import withAuth from '@/components/withAuth';
 import { useAppContext } from '@/context/AppContext';
+import useOutcomeLog from '@/hooks/useOutcomeLog';
 import { useCachedRunResponse } from '@/hooks/useRuns';
-import { DEMO_DEMAND_POINTS } from '@/utils/demoFixtures';
+import { DEMO_DEMAND_POINTS, DEMO_FARMS } from '@/utils/demoFixtures';
 import { buildMandiFulfilmentRows, getDemandPointsFromCache } from '@/utils/mandiFulfilment';
 import { etaFromMinutes } from '@/utils/eta';
 
@@ -86,6 +89,7 @@ function MandiPage() {
         <MandiContent
           mandiId={mandiId}
           runId={runId}
+          cached={cached}
           mandiInfo={mandiInfo}
           fulfilRow={fulfilRow}
           rawRoutes={rawRoutes}
@@ -95,7 +99,14 @@ function MandiPage() {
   );
 }
 
-function MandiContent({ mandiId, runId, mandiInfo, fulfilRow, rawRoutes }) {
+function MandiContent({ mandiId, runId, cached, mandiInfo, fulfilRow, rawRoutes }) {
+  const [outcomeModalMandi, setOutcomeModalMandi] = useState(null);
+  const {
+    logMandiOutcome,
+    logging: outcomeLogging,
+    isLogged: isMandiOutcomeLogged,
+  } = useOutcomeLog(runId);
+
   const confirmKey = runId && mandiId ? `mandi_confirmed:${runId}:${mandiId}` : null;
   const [confirmed, setConfirmed] = useState(() => {
     if (typeof window === 'undefined' || !confirmKey) return false;
@@ -152,6 +163,38 @@ function MandiContent({ mandiId, runId, mandiInfo, fulfilRow, rawRoutes }) {
 
   return (
     <div className="space-y-6">
+      {fulfilRow && (
+        <div
+          style={{ border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--bg-card)', overflow: 'hidden' }}
+        >
+          <MandiFulfilmentCard
+            row={fulfilRow}
+            isFirst
+            canLogOutcome={(fulfilRow.incomingSupply ?? 0) > 0}
+            isLogged={isMandiOutcomeLogged(mandiId)}
+            onConfirmDelivery={setOutcomeModalMandi}
+          />
+        </div>
+      )}
+
+      {outcomeModalMandi && (
+        <DeliveryOutcomeModal
+          mandiRow={outcomeModalMandi}
+          cached={cached}
+          rawRoutes={rawRoutes}
+          farms={Array.isArray(cached?.farms) && cached.farms.length ? cached.farms : DEMO_FARMS}
+          loading={outcomeLogging}
+          onClose={() => setOutcomeModalMandi(null)}
+          onSubmit={(actualOverrides) => logMandiOutcome({
+            mandiRow: outcomeModalMandi,
+            cached,
+            rawRoutes,
+            farms: Array.isArray(cached?.farms) && cached.farms.length ? cached.farms : DEMO_FARMS,
+            actualOverrides,
+          })}
+        />
+      )}
+
       {/* Stock vs Demand */}
       {fulfilRow ? (
         <div
