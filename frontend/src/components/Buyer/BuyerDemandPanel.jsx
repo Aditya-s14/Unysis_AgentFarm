@@ -199,7 +199,7 @@ export default function BuyerDemandPanel({ compact = false }) {
             <input
               type="number"
               min="1"
-              step="50"
+              step="1"
               value={quantityKg}
               onChange={(e) => setQuantityKg(e.target.value)}
               className="font-mono w-full mt-1 px-2 py-1.5"
@@ -212,7 +212,7 @@ export default function BuyerDemandPanel({ compact = false }) {
             <input
               type="number"
               min="0.01"
-              step="0.5"
+              step="0.01"
               value={pricePerKg}
               onChange={(e) => setPricePerKg(e.target.value)}
               className="font-mono w-full mt-1 px-2 py-1.5"

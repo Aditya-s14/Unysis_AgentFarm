@@ -461,6 +461,18 @@ async def get_plan_by_run_id(run_id: str) -> PlanTable | None:
         return q.scalar_one_or_none()
 
 
+async def get_latest_plan() -> PlanTable | None:
+    """Return the most recently created plan row, or None."""
+    async with get_session_maker()() as session:
+        q = await session.execute(
+            select(PlanTable)
+            .where(PlanTable.run_id.isnot(None))
+            .order_by(PlanTable.created_at.desc())
+            .limit(1),
+        )
+        return q.scalar_one_or_none()
+
+
 async def list_run_logs_for_run(run_id: str) -> list[RunLogRow]:
     """Return all RunLogRow entries for *run_id*, oldest first."""
     async with get_session_maker()() as session:
@@ -490,6 +502,18 @@ async def create_plan_outcome(
     season: str | None = None,
 ) -> PlanOutcomeRow:
     async with get_session_maker()() as session:
+        plan = await session.get(PlanTable, plan_id)
+        if plan is None:
+            plan = PlanTable(
+                id=plan_id,
+                route_plan_json={"routes": []},
+                validation_json=None,
+                external_ref=None,
+                run_id=None,
+            )
+            session.add(plan)
+            await session.flush()
+
         row = PlanOutcomeRow(
             plan_id=plan_id,
             waste_kg_predicted=waste_kg_predicted,

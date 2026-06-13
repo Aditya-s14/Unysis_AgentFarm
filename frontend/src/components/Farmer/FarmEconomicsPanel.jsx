@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { formatKg } from '@/utils/formatters';
 import {
   formatMarginBreakdown,
@@ -90,9 +91,14 @@ function EconomicsRow({ row, compact }) {
 /**
  * Per-farm P&L: revenue − logistics − spoilage vs direct buyer offer.
  * Requires a completed scenario run (post-run only).
+ * Pass `farmId` on the farmer role dashboard to show only that farm.
  */
-export default function FarmEconomicsPanel({ compact = false, cachedRun = null }) {
+export default function FarmEconomicsPanel({ compact = false, cachedRun = null, farmId = null }) {
   const { rows, loading, error, hasRun } = useFarmEconomics(cachedRun);
+  const visibleRows = useMemo(
+    () => (farmId ? rows.filter((row) => row.farm_id === farmId) : rows),
+    [rows, farmId],
+  );
 
   return (
     <div
@@ -130,13 +136,15 @@ export default function FarmEconomicsPanel({ compact = false, cachedRun = null }
         </p>
       )}
 
-      {hasRun && !loading && !error && rows.length === 0 && (
+      {hasRun && !loading && !error && visibleRows.length === 0 && (
         <p className="px-4 py-6 font-mono text-muted text-[12px]">
-          No at-risk farms with price quotes for this run.
+          {farmId
+            ? 'No economics data for your farm on this run.'
+            : 'No at-risk farms with price quotes for this run.'}
         </p>
       )}
 
-      {rows.map((row) => (
+      {visibleRows.map((row) => (
         <EconomicsRow key={row.farm_id} row={row} compact={compact} />
       ))}
     </div>

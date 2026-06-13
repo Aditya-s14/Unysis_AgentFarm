@@ -4,7 +4,6 @@ import { listEligibleFarms } from '@/utils/commitmentEligibility';
 import { formatCurrency, formatKg } from '@/utils/formatters';
 import { formatPremiumPct, formatPricePerKg } from '@/utils/priceDiscovery';
 import usePriceAcceptance from '@/hooks/usePriceAcceptance';
-import useFarmerCommitments from '@/hooks/useFarmerCommitments';
 import { SECTION } from '@/utils/uiChars';
 
 function QuoteRow({
@@ -153,9 +152,9 @@ function QuoteRow({
 
 /**
  * Side-by-side APMC vs private buyer prices with digital accept (D1).
+ * Pass `farmId` on the farmer role dashboard to show only that farm.
  */
-export default function PriceDiscoveryBoard({ compact = false }) {
-  const { lockCommitment } = useFarmerCommitments();
+export default function PriceDiscoveryBoard({ compact = false, farmId = null }) {
   const {
     quotes,
     loading,
@@ -164,24 +163,18 @@ export default function PriceDiscoveryBoard({ compact = false }) {
     isAccepted,
     getAcceptance,
     acceptOffer,
-  } = usePriceAcceptance({
-    onAcceptCommitment: (farmId, tonnageKg, privateMandiId) => {
-      lockCommitment(farmId, {
-        tonnage_kg: tonnageKg,
-        demand_point_id: privateMandiId,
-      });
-    },
-  });
+  } = usePriceAcceptance();
 
   const eligibleIds = useMemo(
     () => new Set(listEligibleFarms(DEMO_FARMS).map((f) => f.id)),
     [],
   );
 
-  const visibleQuotes = useMemo(
-    () => quotes.filter((q) => eligibleIds.has(q.farm_id)),
-    [quotes, eligibleIds],
-  );
+  const visibleQuotes = useMemo(() => {
+    let filtered = quotes.filter((q) => eligibleIds.has(q.farm_id));
+    if (farmId) filtered = filtered.filter((q) => q.farm_id === farmId);
+    return filtered;
+  }, [quotes, eligibleIds, farmId]);
 
   if (loading && visibleQuotes.length === 0) {
     return (
@@ -210,7 +203,9 @@ export default function PriceDiscoveryBoard({ compact = false }) {
         }}
       >
         <p className="font-mono text-muted" style={{ fontSize: '11px' }}>
-          No harvest-eligible farms in the next 7 days for price discovery.
+          {farmId
+            ? 'No price quotes for your farm in the next 7-day harvest window.'
+            : 'No harvest-eligible farms in the next 7 days for price discovery.'}
         </p>
       </div>
     );

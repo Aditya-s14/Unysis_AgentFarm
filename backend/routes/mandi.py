@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from models.db_models import PlanOutcomeRow
 from models.schemas import MandiArrivalConfirm
 from tools.db import get_plan_by_run_id, get_session_maker
+from tools.http_errors import friendly_outcome_error
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ async def post_mandi_confirm(
             await session.refresh(row)
     except Exception as exc:  # noqa: BLE001
         logger.exception("POST /api/run/%s/mandi/%s/confirm failed", run_id, mandi_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise friendly_outcome_error(exc) from exc
 
     return {
         "run_id": run_id,

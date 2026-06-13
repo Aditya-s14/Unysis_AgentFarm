@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { DEMO_DEMAND_POINTS, DEMO_FARMS } from '@/utils/demoFixtures';
 import { formatCurrency, formatKg } from '@/utils/formatters';
 import useMarketOffers from '@/hooks/useMarketOffers';
-import useFarmerCommitments from '@/hooks/useFarmerCommitments';
 
 const CROP_OPTIONS = ['tomato', 'onion', 'banana', 'mango'];
 const PRIVATE_DPS = DEMO_DEMAND_POINTS.filter((d) => d.point_type === 'private');
@@ -128,7 +127,6 @@ function CommitmentRow({ commitment }) {
  * D4 — unified bid/ask offer ledger with accept → guaranteed pickup.
  */
 export default function OfferLedgerPanel() {
-  const { lockCommitment } = useFarmerCommitments();
   const {
     offers,
     commitments,
@@ -139,11 +137,7 @@ export default function OfferLedgerPanel() {
     postOffer,
     acceptOffer,
     refresh,
-  } = useMarketOffers({
-    onAcceptCommitment: (farmId, tonnageKg, demandPointId) => {
-      lockCommitment(farmId, { tonnage_kg: tonnageKg, demand_point_id: demandPointId });
-    },
-  });
+  } = useMarketOffers();
 
   const [side, setSide] = useState('ask');
   const [farmId, setFarmId] = useState(DEMO_FARMS[0]?.id || '');

@@ -1,10 +1,10 @@
 ﻿import Head from 'next/head';
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { postTruckPosition, getRun } from '@/api/client';
 import BreakdownReportModal from '@/components/Transport/BreakdownReportModal';
 import AlternateStopsPanel from '@/components/Transport/AlternateStopsPanel';
+import DriverSidebar, { SIDEBAR_WIDTH } from '@/components/Driver/DriverSidebar';
 import withAuth from '@/components/withAuth';
 import { useAppContext } from '@/context/AppContext';
 import { formatApiError } from '@/utils/api';
@@ -104,6 +104,7 @@ function DriverDashboardPage() {
   const farmStops = sortedStops.filter((s) => !s.demand_point_id);
 
   const truckLabel = truckId ? displayTruckId(String(truckId)) : 'Truck';
+  const routeHref = runId && truckId ? `/driver/${runId}/${truckId}` : null;
 
   const nearbyTrucks = DEMO_TRUCKS.filter(
     (t) => t.id !== truckId && t.driver_phone,
@@ -117,52 +118,34 @@ function DriverDashboardPage() {
   return (
     <>
       <Head><title>Driver — {truckLabel}</title></Head>
-      <main
-        className="min-h-screen p-4 font-mono max-w-lg mx-auto"
-        style={{ background: 'var(--bg)', color: 'var(--text)' }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="font-syne font-bold uppercase text-paper" style={{ fontSize: '16px' }}>
-              {truckLabel}
-            </p>
-            <p className="text-[11px]" style={{ color: 'var(--muted)' }}>
-              Run {String(runId || '').slice(0, 8)}…
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ background: statusColors[status] || '#8A9E8C' }}
-              />
-              <span className="text-[11px] uppercase tracking-wider" style={{ color: statusColors[status] }}>
-                {status.replace('_', ' ')}
-              </span>
-            </div>
-            <Link
-              href="/runs"
-              style={{
-                display: 'flex', alignItems: 'center', gap: '4px',
-                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                borderRadius: '6px', padding: '6px 10px', cursor: 'pointer',
-                color: 'var(--text)', fontSize: '12px', fontFamily: 'monospace',
-                textDecoration: 'none',
-              }}
-            >
-              ← Runs
-            </Link>
-          </div>
-        </div>
+      <div className="flex min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+        <DriverSidebar truckLabel={truckLabel} routeHref={routeHref} />
 
+        <main
+          className="flex-1 min-h-screen p-4 font-mono max-w-lg"
+          style={{ marginLeft: SIDEBAR_WIDTH }}
+        >
         {/* GPS status */}
         <div
           className="p-3 mb-4"
           style={{ border: '1px solid var(--border)', borderRadius: '4px' }}
         >
-          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--accent)' }}>
-            GPS — posting every 30s
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
+              GPS — posting every 30s
+            </p>
+            <div className="flex items-center gap-2">
+              <div
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ background: statusColors[status] || '#8A9E8C' }}
+              />
+              <span className="text-[10px] uppercase tracking-wider" style={{ color: statusColors[status] }}>
+                {status.replace('_', ' ')}
+              </span>
+            </div>
+          </div>
+          <p className="text-[11px] mb-1" style={{ color: 'var(--muted)' }}>
+            Run {String(runId || '').slice(0, 8)}…
           </p>
           {lastPosition ? (
             <>
@@ -348,14 +331,6 @@ function DriverDashboardPage() {
           </button>
         )}
 
-        <Link
-          href="/runs"
-          className="text-[12px] uppercase tracking-wider"
-          style={{ color: 'var(--accent)' }}
-        >
-          ← Runs
-        </Link>
-
         {showBreakdown && runId && truckId && (
           <BreakdownReportModal
             runId={runId}
@@ -366,7 +341,8 @@ function DriverDashboardPage() {
             onReported={() => { setShowBreakdown(false); }}
           />
         )}
-      </main>
+        </main>
+      </div>
     </>
   );
 }

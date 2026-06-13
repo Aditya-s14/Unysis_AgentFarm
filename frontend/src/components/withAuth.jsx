@@ -34,14 +34,13 @@ export default function withAuth(WrappedComponent, allowedRoles = null) {
         if (home) {
           router.replace(home);
         } else if (user.role === 'driver') {
-          // Driver needs a runId â€” go to /runs to pick one, or / if no run
           const runId = typeof window !== 'undefined'
             ? localStorage.getItem('agentfarm_run_id')
             : null;
           if (runId) {
             router.replace(`/driver/${runId}/${user.entity_id}`);
           } else {
-            router.replace('/runs');
+            router.replace('/driver');
           }
         }
       }

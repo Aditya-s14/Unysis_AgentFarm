@@ -1,7 +1,6 @@
 import { useRouter } from 'next/router';
 import ScenarioTypeSelect from './ScenarioTypeSelect';
 import useScenario from '@/hooks/useScenario';
-import { getCommitmentsForApi } from '@/hooks/useFarmerCommitments';
 import { getBuyerDemandsForApi } from '@/hooks/useBuyerDemands';
 import { getMarketCommitmentsForApi } from '@/hooks/useMarketOffers';
 import { useAppContext } from '@/context/AppContext';
@@ -24,7 +23,6 @@ export default function ScenarioForm({ onRunStart, onComplete, onError }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     onRunStart?.(scenarioDraft.scenarioType);
-    const farmer_commitments = getCommitmentsForApi();
     const buyer_demands = getBuyerDemandsForApi();
     const market_commitments = getMarketCommitmentsForApi();
     const body = {
@@ -32,7 +30,7 @@ export default function ScenarioForm({ onRunStart, onComplete, onError }) {
       farms: DEMO_FARMS,
       demand_points: DEMO_DEMAND_POINTS,
       trucks: DEMO_TRUCKS,
-      farmer_commitments,
+      farmer_commitments: [],
       buyer_demands,
       market_commitments,
     };
@@ -47,7 +45,7 @@ export default function ScenarioForm({ onRunStart, onComplete, onError }) {
         scenario_type: body.scenario_type,
         farms: body.farms,
         demand_points: body.demand_points,
-        farmer_commitments,
+        farmer_commitments: [],
         buyer_demands,
         market_commitments,
       };

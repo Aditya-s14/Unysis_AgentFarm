@@ -113,7 +113,7 @@ export const DEMO_BUYER_DEMANDS = [
     buyer_type: 'restaurant',
     crop_type: 'tomato',
     quantity_kg: 800,
-    price_per_kg: 22,
+    price_per_kg: 20,
   },
   {
     id: 'buyer-dp-priv-02-onion',
@@ -122,7 +122,7 @@ export const DEMO_BUYER_DEMANDS = [
     buyer_type: 'supermarket',
     crop_type: 'onion',
     quantity_kg: 600,
-    price_per_kg: 16,
+    price_per_kg: 13,
   },
   {
     id: 'buyer-dp-priv-03-banana',
@@ -131,7 +131,7 @@ export const DEMO_BUYER_DEMANDS = [
     buyer_type: 'exporter',
     crop_type: 'banana',
     quantity_kg: 500,
-    price_per_kg: 25,
+    price_per_kg: 19,
   },
 ];
 
@@ -171,7 +171,7 @@ export const DEMO_MARKET_OFFERS = {
       demand_point_id: 'dp-priv-03',
       crop_type: 'banana',
       quantity_kg: 500,
-      price_per_kg: 25,
+      price_per_kg: 19,
       status: 'open',
     },
     {
@@ -183,7 +183,7 @@ export const DEMO_MARKET_OFFERS = {
       demand_point_id: 'dp-priv-01',
       crop_type: 'tomato',
       quantity_kg: 750,
-      price_per_kg: 23,
+      price_per_kg: 20,
       status: 'open',
     },
   ],

@@ -1,5 +1,5 @@
 crop_type,base_apmc_price_per_kg,private_premium_pct
-tomato,18,0.15
-onion,14,0.12
-banana,22,0.10
-mango,35,0.18
+tomato,18,0.12
+onion,14,0.08
+banana,22,-0.06
+mango,35,-0.17

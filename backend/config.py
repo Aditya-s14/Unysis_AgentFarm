@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     max_retries: int = 2
     planning_temp: float = 0.0
     advisor_temp: float = 0.3
+    advisor_max_tokens: int = 512
     # Max straight-line distance (km) a farm may be matched with a mandi.
     # Reflects how India's APMC system actually works at the farmer layer:
     # produce moves to the nearest regional mandi (typically <100 km), with

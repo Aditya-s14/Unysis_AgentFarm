@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from agents.advisor_agent import answer_query
 from models.schemas import PlanOutcome
 from tools.db import create_plan_outcome
+from tools.http_errors import friendly_outcome_error
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -64,4 +65,4 @@ async def log_outcome(body: PlanOutcome) -> dict:
         return {"id": str(row.id), "plan_id": str(row.plan_id)}
     except Exception as exc:
         logger.exception("POST /api/outcome/log failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise friendly_outcome_error(exc) from exc

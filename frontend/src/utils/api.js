@@ -19,11 +19,33 @@ export function buildUrl(base, path) {
 /**
  * Convert an axios error into a human-friendly message for surfaces to display.
  */
+function sanitizeDetail(detail) {
+  if (detail == null) return null;
+  const text = typeof detail === 'string'
+    ? detail
+    : Array.isArray(detail)
+      ? detail.map((d) => d.msg || JSON.stringify(d)).join('; ')
+      : JSON.stringify(detail);
+  const lowered = text.toLowerCase();
+  if (
+    lowered.includes('insert into')
+    || lowered.includes('integrityerror')
+    || lowered.includes('foreignkeyviolation')
+    || lowered.includes('asyncpg')
+    || lowered.includes('sqlalchemy')
+    || lowered.includes('[sql:')
+  ) {
+    return 'Could not save outcome. The run may be missing from the database — try running a new scenario.';
+  }
+  return text;
+}
+
 export function formatApiError(error) {
   if (!error) return 'Unknown error';
   if (error.response) {
     const { status, data } = error.response;
-    const detail = data?.detail || data?.message || data?.error;
+    const raw = data?.detail || data?.message || data?.error;
+    const detail = sanitizeDetail(raw);
     return `[${status}] ${detail || 'Request failed'}`;
   }
   if (error.request) {

@@ -45,6 +45,29 @@ async def _load_plan_row(run_id: str) -> object | None:
         return None
 
 
+async def _resolve_plan_and_run(run_id: str) -> tuple[object | None, dict[str, Any], str]:
+    """Load plan row and run detail; fall back to the latest plan when run_id is stale."""
+    plan_row = await _load_plan_row(run_id)
+    effective_run_id = run_id
+    if plan_row is None:
+        try:
+            from tools.db import get_latest_plan
+
+            latest = await get_latest_plan()
+            if latest is not None and getattr(latest, "run_id", None):
+                plan_row = latest
+                effective_run_id = str(latest.run_id)
+                logger.info(
+                    "advisor: run %s not found — using latest plan run_id=%s",
+                    run_id,
+                    effective_run_id,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("advisor: latest plan lookup failed: %s", exc)
+    run_detail = await _load_run_detail(effective_run_id)
+    return plan_row, run_detail, effective_run_id
+
+
 async def _load_run_detail(run_id: str) -> dict[str, Any]:
     """Return plan_run_complete detail_json for run_id (KPIs + plan snapshot), or {}."""
     try:
@@ -415,8 +438,10 @@ def _assemble_plan_context(
             f"incoming {m['incoming_supply_kg']:.0f} kg, "
             f"shortage {m['shortage_kg']:.0f} kg ({m['fulfilment_pct']:.0f}% fulfilment, {m['status']})"
         )
-        for m in mandi_rows
+        for m in mandi_rows[:10]
     ]
+    route_lines = route_lines[:8]
+    farm_lines = farm_lines[:10]
 
     waste_reduction = run_detail.get("waste_reduction_pct")
     if waste_reduction is not None:
@@ -457,6 +482,7 @@ def _assemble_plan_context(
         "route_lines": route_lines,
         "waste_reduction_pct": waste_reduction,
         "weather_snapshot": weather_snapshot,
+        "weather_line": weather_line,
     }
 
 
@@ -501,6 +527,32 @@ def _try_rule_based_answer(question: str, ctx: dict[str, Any]) -> str | None:
             return f"Warmest farms in the stored OpenWeather readings: {names}."
 
     mandi_rows: list[dict] = ctx.get("mandi_rows") or []
+    if mandi_rows and re.search(
+        r"\b(demand|demands|volume|throughput)\b",
+        q,
+    ) and re.search(
+        r"\b(mandi|market|apmc|which|highest|most|biggest|largest|top)\b",
+        q,
+    ):
+        top = max(mandi_rows, key=lambda m: m["expected_demand_kg"])
+        runners = sorted(
+            mandi_rows,
+            key=lambda m: m["expected_demand_kg"],
+            reverse=True,
+        )[1:3]
+        msg = (
+            f"{top['name']} has the highest expected demand in this plan — "
+            f"about {top['expected_demand_kg']:.0f} kg/day. "
+            f"Trucks are scheduled to deliver {top['incoming_supply_kg']:.0f} kg "
+            f"({top['fulfilment_pct']:.0f}% fulfilment, {top['status']})."
+        )
+        if runners:
+            msg += (
+                f" Next: {runners[0]['name']} "
+                f"({runners[0]['expected_demand_kg']:.0f} kg/day expected)."
+            )
+        return msg
+
     if not mandi_rows:
         return None
 
@@ -523,6 +575,32 @@ def _try_rule_based_answer(question: str, ctx: dict[str, Any]) -> str | None:
                 f"({runners[0]['shortage_kg']:.0f} kg short)."
             )
         return msg
+
+    route_lines: list[str] = ctx.get("route_lines") or []
+    farm_lines: list[str] = ctx.get("farm_lines") or []
+    if route_lines and re.search(r"\b(route|routes|monsoon|rain|weather|transport)\b", q):
+        top_routes = "; ".join(route_lines[:3])
+        weather = ctx.get("weather_line") or "Weather data not recorded."
+        return (
+            f"For this run, key truck routes are: {top_routes}. "
+            f"Weather context: {weather}. "
+            "In heavy rain, stick to the assigned route and allow extra time at farm pickups."
+        )
+
+    farm_match = re.search(r"farm\s*#?\s*(\d+)", q)
+    if farm_match and farm_lines:
+        num = farm_match.group(1)
+        match_line = next(
+            (line for line in farm_lines if f"#{num}" in line.lower() or f"farm {num}" in line.lower()),
+            None,
+        )
+        if not match_line and len(farm_lines) >= int(num):
+            match_line = farm_lines[int(num) - 1]
+        if match_line:
+            return (
+                f"For Farm #{num} in this plan: {match_line}. "
+                "Follow the assigned truck pickup window and send stock to the routed mandi."
+            )
 
     return None
 
@@ -556,9 +634,10 @@ async def _llm_answer(
         resp = await client.chat.completions.create(
             model="gpt-4o-mini",
             temperature=settings.advisor_temp,
+            max_tokens=settings.advisor_max_tokens,
             messages=messages,
         )
-        reply = (resp.choices[0].message.content or "").strip() or _FALLBACK_REPLY
+        reply = (resp.choices[0].message.content or "").strip()
         tokens = resp.usage.total_tokens if resp.usage else None
         return reply, tokens
 
@@ -569,7 +648,7 @@ async def _llm_answer(
             exc,
             exc_info=True,
         )
-        return _FALLBACK_REPLY, None
+        return "", None
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
@@ -583,16 +662,11 @@ async def answer_query(
     """Answer a farmer's plain-language question about a run's plan."""
     t0 = datetime.now(timezone.utc)
 
-    import asyncio
+    plan_row, run_detail, effective_run_id = await _resolve_plan_and_run(run_id)
+    farm_names, dp_info = await _load_name_maps()
 
-    plan_row, run_detail, (farm_names, dp_info) = await asyncio.gather(
-        _load_plan_row(run_id),
-        _load_run_detail(run_id),
-        _load_name_maps(),
-    )
-
-    ctx = _assemble_plan_context(run_id, plan_row, run_detail, farm_names, dp_info)
-    ctx["run_id"] = run_id
+    ctx = _assemble_plan_context(effective_run_id, plan_row, run_detail, farm_names, dp_info)
+    ctx["run_id"] = effective_run_id
     system_prompt = ctx["system_prompt"]
     logger.debug("advisor system_prompt:\n%s", system_prompt)
 
@@ -603,7 +677,13 @@ async def answer_query(
         ruled = _try_rule_based_answer(question, ctx)
         if ruled:
             reply, tokens = ruled, None
-        else:
+        elif plan_row is None and not ctx.get("mandi_rows"):
+            reply = (
+                "I don't have plan data for this run yet. "
+                "Run a scenario from the Scenario page, then ask again."
+            )
+            tokens = None
+        elif not (get_settings().OPENAI_API_KEY or "").strip():
             logger.warning(
                 "advisor: OPENAI_API_KEY missing and no rule match — generic demo hint.",
             )
@@ -613,12 +693,15 @@ async def answer_query(
                 "for shortage_kg per market."
             )
             tokens = None
+        else:
+            reply = _FALLBACK_REPLY
+            tokens = None
 
     await push_message(session_id, "user", question)
     await push_message(session_id, "assistant", reply)
 
     elapsed_ms = int((datetime.now(timezone.utc) - t0).total_seconds() * 1000)
-    sources = [f"plan:{run_id}"]
+    sources = [f"plan:{effective_run_id}"]
     if plan_row is not None:
         sources.append(f"db_plan_id:{getattr(plan_row, 'id', 'unknown')}")
     if run_detail:
@@ -635,6 +718,6 @@ async def answer_query(
     return AdvisorResponse(
         reply=reply,
         sources=sources,
-        run_id=run_id,
+        run_id=effective_run_id,
         session_id=session_id,
     )

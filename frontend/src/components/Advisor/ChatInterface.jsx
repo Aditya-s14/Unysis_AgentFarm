@@ -2,6 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import ChatMessage from './ChatMessage';
 import useAdvisor from '@/hooks/useAdvisor';
 import { useAppContext } from '@/context/AppContext';
+import { getRun } from '@/api/client';
+
+const LAST_RESPONSE_KEY = 'agentfarm_last_response';
 
 const SUGGESTIONS = [
   'What should Farm #7 do tomorrow?',
@@ -14,13 +17,75 @@ const SUGGESTIONS = [
  * Uses the session id from AppContext so follow-up questions share memory.
  */
 export default function ChatInterface() {
-  const { currentRunId, sessionId } = useAppContext();
+  const { currentRunId, setCurrentRunId, sessionId } = useAppContext();
+  const [resolvedRunId, setResolvedRunId] = useState(currentRunId);
+  const [runNotice, setRunNotice] = useState(null);
   const { messages, loading, error, ask } = useAdvisor({
-    runId: currentRunId,
+    runId: resolvedRunId,
     sessionId,
   });
   const [input, setInput] = useState('');
   const scrollerRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolveRun() {
+      if (!currentRunId) {
+        setResolvedRunId(null);
+        setRunNotice('No run selected — run a scenario first, then return here.');
+        return;
+      }
+
+      try {
+        await getRun(currentRunId);
+        if (!cancelled) {
+          setResolvedRunId(currentRunId);
+          setRunNotice(null);
+        }
+        return;
+      } catch {
+        /* stale run id — try cached scenario response */
+      }
+
+      try {
+        const raw = window.localStorage.getItem(LAST_RESPONSE_KEY);
+        const cached = raw ? JSON.parse(raw) : null;
+        const cachedRunId = cached?.run_id;
+        if (cachedRunId && cachedRunId !== currentRunId) {
+          await getRun(cachedRunId);
+          if (!cancelled) {
+            setCurrentRunId(cachedRunId);
+            setResolvedRunId(cachedRunId);
+            setRunNotice('Switched to your latest scenario run.');
+            return;
+          }
+        }
+        if (cachedRunId) {
+          await getRun(cachedRunId);
+          if (!cancelled) {
+            setResolvedRunId(cachedRunId);
+            setRunNotice(null);
+            return;
+          }
+        }
+      } catch {
+        /* no valid cached run */
+      }
+
+      if (!cancelled) {
+        setResolvedRunId(currentRunId);
+        setRunNotice(
+          'Plan data for this run was not found. Run a new scenario, or ask anyway — the advisor will use the latest plan if available.',
+        );
+      }
+    }
+
+    resolveRun();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentRunId, setCurrentRunId]);
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({
@@ -31,7 +96,7 @@ export default function ChatInterface() {
 
   const handleSend = async (text) => {
     const q = (text ?? input).trim();
-    if (!q) return;
+    if (!q || !resolvedRunId) return;
     setInput('');
     await ask(q);
   };
@@ -55,9 +120,22 @@ export default function ChatInterface() {
           🌾 KISAN MITRA
         </h3>
         <p className="font-mono text-muted text-[11px] tracking-wider">
-          SESSION {sessionId?.slice(0, 8) || '…'} · RUN {currentRunId?.slice(0, 8) || 'NONE'}
+          SESSION {sessionId?.slice(0, 8) || '…'} · RUN {resolvedRunId?.slice(0, 8) || 'NONE'}
         </p>
       </div>
+
+      {runNotice && (
+        <p
+          className="px-5 py-2 font-mono text-[11px]"
+          style={{
+            color: 'var(--accent)',
+            borderBottom: '1px solid var(--border)',
+            background: 'rgba(245,166,35,0.06)',
+          }}
+        >
+          {runNotice}
+        </p>
+      )}
 
       <div
         ref={scrollerRef}
@@ -137,7 +215,7 @@ export default function ChatInterface() {
         />
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !resolvedRunId}
           className="px-5 py-2 font-mono uppercase tracking-wider-2 transition disabled:opacity-50"
           style={{
             background: 'var(--accent)',

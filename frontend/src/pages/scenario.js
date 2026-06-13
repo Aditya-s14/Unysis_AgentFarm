@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import DashboardLayout from '@/components/Dashboard/DashboardLayout';
 import ScenarioForm from '@/components/ScenarioBuilder/ScenarioForm';
-import FarmerCommitmentPanel from '@/components/Farmer/FarmerCommitmentPanel';
 import PriceDiscoveryBoard from '@/components/Farmer/PriceDiscoveryBoard';
 import BuyerDemandPanel from '@/components/Buyer/BuyerDemandPanel';
 import FarmEconomicsPanel from '@/components/Farmer/FarmEconomicsPanel';
@@ -96,7 +95,6 @@ export default function ScenarioPage() {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1 space-y-0">
-              <FarmerCommitmentPanel />
               <PriceDiscoveryBoard compact />
               <BuyerDemandPanel compact />
               <ScenarioForm

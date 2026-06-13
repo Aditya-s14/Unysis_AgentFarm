@@ -1,18 +1,24 @@
 import { getRun } from '@/api/client';
 import { DEMO_FARMS } from '@/utils/demoFixtures';
 
-/** Return plan UUID from cached run or fetch GET /api/run/{runId}. */
+/** Return plan UUID from GET /api/run/{runId}, with cache fallback. */
 export async function resolvePlanId(cached, runId) {
+  if (runId) {
+    try {
+      const runResp = await getRun(runId);
+      if (runResp?.id) return String(runResp.id);
+    } catch {
+      /* fall through to cache */
+    }
+  }
+
   const fromCache = cached?.plan?.id;
   if (fromCache) return String(fromCache);
+
   if (!runId) {
     throw new Error('No plan_id available — run a scenario first');
   }
-  const runResp = await getRun(runId);
-  if (!runResp?.id) {
-    throw new Error('Could not resolve plan_id for this run');
-  }
-  return String(runResp.id);
+  throw new Error('Run not found in database — run a new scenario first');
 }
 
 /** Proportional share of optimized waste attributed to this mandi. */

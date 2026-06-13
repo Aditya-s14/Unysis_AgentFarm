@@ -11,9 +11,7 @@ import FpoApprovalPanel from '@/components/Dashboard/FpoApprovalPanel';
 import TruckGapAlertPanel from '@/components/Dashboard/TruckGapAlertPanel';
 import PriceDiscoveryBoard from '@/components/Farmer/PriceDiscoveryBoard';
 import FarmEconomicsPanel from '@/components/Farmer/FarmEconomicsPanel';
-import FarmerCommitmentPanel from '@/components/Farmer/FarmerCommitmentPanel';
 import BuyerDemandPanel from '@/components/Buyer/BuyerDemandPanel';
-import OfferLedgerPanel from '@/components/Market/OfferLedgerPanel';
 import BuyerRoutePriorityBanner from '@/components/Buyer/BuyerRoutePriorityBanner';
 import SeasonTrendPanel from '@/components/Dashboard/SeasonTrendPanel';
 import WeatherRiskPanel from '@/components/Dashboard/WeatherRiskPanel';
@@ -49,7 +47,6 @@ import MandiRiskHighlights from '@/components/Mandi/MandiRiskHighlights';
 import MandiFulfilmentCard from '@/components/Mandi/MandiFulfilmentCard';
 import DeliveryOutcomeModal from '@/components/Mandi/DeliveryOutcomeModal';
 import useOutcomeLog from '@/hooks/useOutcomeLog';
-import useFarmerCommitments from '@/hooks/useFarmerCommitments';
 import { getMarketCommitmentsForApi } from '@/hooks/useMarketOffers';
 
 const TABS = [
@@ -58,7 +55,6 @@ const TABS = [
   { id: 'mandi',      label: 'MANDI' },
   { id: 'transport',  label: 'TRANSPORT' },
   { id: 'buyer',      label: 'BUYER' },
-  { id: 'market',     label: 'MARKET' },
 ];
 
 // Estimated pickup times for up to 20 farms (30-min slots from 5:00 AM)
@@ -95,6 +91,50 @@ function getFarmRiskLevel(farmId, atRiskMap) {
   if (hours != null && hours < 24) return 'severe';
   if (hours != null && hours < 48) return 'warning';
   return 'normal';
+}
+
+function parseWeatherFromEvent(event) {
+  if (!event) return { rainMm: null, tempC: null };
+  const desc = String(event.description || '');
+  const precip = event.precipitation_mm != null ? Number(event.precipitation_mm) : null;
+  const rainMatch = desc.match(/rain=([\d.]+)\s*mm/i);
+  const tempMatch = desc.match(/temp(?:_moderate)?=([\d.]+)\s*C/i);
+  const rainMm = rainMatch ? Number(rainMatch[1]) : (Number.isFinite(precip) ? precip : null);
+  const tempC = tempMatch ? Number(tempMatch[1]) : null;
+  return { rainMm, tempC };
+}
+
+function resolveFarmWeatherEvent(farmId, weatherEvents, farmsOrder) {
+  if (!Array.isArray(weatherEvents) || weatherEvents.length === 0) return null;
+  const byId = weatherEvents.find((e) => e?.farm_id === farmId);
+  if (byId) return byId;
+  const farms = farmsOrder || DEMO_FARMS;
+  const idx = farms.findIndex((f) => f.id === farmId);
+  if (idx >= 0 && idx < weatherEvents.length) return weatherEvents[idx];
+  return null;
+}
+
+function weatherRiskBadgeStyle(level) {
+  const key = String(level || 'normal').toLowerCase();
+  if (key === 'severe') {
+    return {
+      color: 'var(--red-risk)',
+      border: '1px solid var(--red-risk)',
+      background: 'rgba(220,50,50,0.08)',
+    };
+  }
+  if (key === 'warning') {
+    return {
+      color: '#FF9800',
+      border: '1px solid #FF9800',
+      background: 'rgba(255,152,0,0.08)',
+    };
+  }
+  return {
+    color: 'var(--green-ok)',
+    border: '1px solid var(--green-ok)',
+    background: 'rgba(76, 175, 80, 0.08)',
+  };
 }
 
 function matchesSpoilageWindow(hours, windowKey) {
@@ -136,6 +176,7 @@ function mergeRunPlanIntoCache(cached, runResp) {
     ...cached,
     plan: {
       ...cached.plan,
+      id: runResp.id ?? cached.plan?.id,
       route_plan: runResp.route_plan ?? cached.plan?.route_plan,
       validation: runResp.validation ?? cached.plan?.validation,
     },
@@ -187,8 +228,6 @@ function DashboardPage() {
     logging: outcomeLogging,
     isLogged: isMandiOutcomeLogged,
   } = useOutcomeLog(runId);
-
-  const { isLocked: isFarmCommitted, getCommitment: getFarmCommitment } = useFarmerCommitments();
 
   const guaranteedFarmIds = useMemo(() => {
     const commitments = getMarketCommitmentsForApi();
@@ -310,6 +349,18 @@ function DashboardPage() {
     const m = {};
     (cached?.at_risk_stock || []).forEach((s) => { m[s.farm_id] = s; });
     return m;
+  }, [cached]);
+
+  const farmerWeatherContext = useMemo(() => {
+    if (!cached?.run_id) {
+      return { hasRun: false, riskSummary: {}, events: [], farmsOrder: DEMO_FARMS };
+    }
+    return {
+      hasRun: true,
+      riskSummary: cached?.plan?.weather_risk_summary ?? cached?.weather_risk_summary ?? {},
+      events: cached?.weather_events ?? cached?.weather_snapshot?.weather_events ?? [],
+      farmsOrder: Array.isArray(cached?.farms) && cached.farms.length ? cached.farms : DEMO_FARMS,
+    };
   }, [cached]);
 
   const weatherRiskByFarm = useMemo(() => {
@@ -643,7 +694,6 @@ function DashboardPage() {
             {/* ---- FARMER tab ------------------------------------------------------------------------------------------ */}
             {activeTab === 'farmer' && (
               <section className="mt-6 space-y-4">
-                <FarmerCommitmentPanel />
                 <PriceDiscoveryBoard />
                 <FarmEconomicsPanel />
 
@@ -709,52 +759,72 @@ function DashboardPage() {
                       const hours   = stock?.hours_until_spoilage ?? null;
                       const kg      = stock?.kg_at_risk ?? farm.typical_yield_kg;
                       const pickupTime = ESTIMATED_PICKUP_TIMES[idx] || '7:00 AM';
-                      const committed = isFarmCommitted(farm.id);
-                      const commitKg = getFarmCommitment(farm.id)?.tonnage_kg;
                       const guaranteed = guaranteedFarmIds.has(farm.id);
+                      const weatherRisk = farmerWeatherContext.riskSummary[farm.id] || 'normal';
+                      const weatherEvent = resolveFarmWeatherEvent(
+                        farm.id,
+                        farmerWeatherContext.events,
+                        farmerWeatherContext.farmsOrder,
+                      );
+                      const { rainMm, tempC } = parseWeatherFromEvent(weatherEvent);
                       return (
                         <div key={farm.id} className="px-5 py-4">
                           <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-syne font-bold text-paper flex items-center gap-2 flex-wrap" style={{ fontSize: '13px' }}>
-                                <span
-                                  aria-hidden
-                                  style={{ color: 'var(--green-ok)', fontSize: '10px', lineHeight: 1 }}
-                                >
-                                  ●
-                                </span>
-                                {farm.name}
-                                {committed && (
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-3">
+                                <p className="font-syne font-bold text-paper flex items-center gap-2 flex-wrap min-w-0" style={{ fontSize: '13px' }}>
                                   <span
-                                    className="font-mono uppercase"
-                                    style={{
-                                      fontSize: '9px',
-                                      letterSpacing: '0.12em',
-                                      padding: '2px 8px',
-                                      border: '1px solid var(--green-ok)',
-                                      color: 'var(--green-ok)',
-                                      borderRadius: '2px',
-                                    }}
+                                    aria-hidden
+                                    style={{ color: 'var(--green-ok)', fontSize: '10px', lineHeight: 1 }}
                                   >
-                                    COMMITTED · {Number(commitKg || 0).toLocaleString()} kg
+                                    ●
                                   </span>
-                                )}
-                                {guaranteed && (
-                                  <span
-                                    className="font-mono uppercase"
-                                    style={{
-                                      fontSize: '9px',
-                                      letterSpacing: '0.12em',
-                                      padding: '2px 8px',
-                                      border: '1px solid var(--accent)',
-                                      color: 'var(--accent)',
-                                      borderRadius: '2px',
-                                    }}
-                                  >
-                                    GUARANTEED
-                                  </span>
-                                )}
-                              </p>
+                                  {farm.name}
+                                  {guaranteed && (
+                                    <span
+                                      className="font-mono uppercase"
+                                      style={{
+                                        fontSize: '9px',
+                                        letterSpacing: '0.12em',
+                                        padding: '2px 8px',
+                                        border: '1px solid var(--accent)',
+                                        color: 'var(--accent)',
+                                        borderRadius: '2px',
+                                      }}
+                                    >
+                                      GUARANTEED
+                                    </span>
+                                  )}
+                                </p>
+                                <div className="shrink-0 text-right max-w-[140px]">
+                                  {farmerWeatherContext.hasRun ? (
+                                    <>
+                                      <span
+                                        className="font-mono uppercase tracking-wider inline-block px-2 py-0.5"
+                                        style={{
+                                          fontSize: '9px',
+                                          letterSpacing: '0.12em',
+                                          borderRadius: '2px',
+                                          ...weatherRiskBadgeStyle(weatherRisk),
+                                        }}
+                                      >
+                                        {String(weatherRisk).toUpperCase()}
+                                      </span>
+                                      {(rainMm != null || tempC != null) && (
+                                        <p className="font-mono text-muted mt-1" style={{ fontSize: '10px', lineHeight: 1.4 }}>
+                                          {rainMm != null ? `${rainMm}mm rain` : ''}
+                                          {rainMm != null && tempC != null ? ` ${MIDDOT} ` : ''}
+                                          {tempC != null ? `${Math.round(tempC)}°C` : ''}
+                                        </p>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <p className="font-mono text-muted" style={{ fontSize: '10px', lineHeight: 1.4 }}>
+                                      No weather data — run a scenario first
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
                               <p className="font-mono text-muted mt-1" style={{ fontSize: '11px' }}>
                                 {kg.toLocaleString()} kg at risk
                                 {hours != null ? ` ${MIDDOT} ${Math.round(hours)}h until spoilage` : ''}
@@ -770,15 +840,6 @@ function DashboardPage() {
                                   {' '}
                                   No truck assigned yet
                                 </p>
-                              )}
-                              {committed && (
-                                <Link
-                                  href="/scenario"
-                                  className="font-mono mt-2 inline-block"
-                                  style={{ fontSize: '10px', color: 'var(--accent)' }}
-                                >
-                                  Edit on Scenario page →
-                                </Link>
                               )}
                             </div>
                             <UrgencyBadge hours={hours} />
@@ -833,12 +894,6 @@ function DashboardPage() {
             {activeTab === 'buyer' && (
               <section className="mt-6 space-y-4">
                 <BuyerDemandPanel />
-              </section>
-            )}
-
-            {activeTab === 'market' && (
-              <section className="mt-6 space-y-4">
-                <OfferLedgerPanel />
               </section>
             )}
 

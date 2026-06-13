@@ -85,12 +85,12 @@ def load_crop_prices() -> dict[str, tuple[float, float]]:
 
 
 def _mandi_variance(apmc_id: str) -> float:
-    """±3% variance by mandi index for demo realism."""
+    """±15% variance by mandi index for demo realism."""
     try:
         n = int(apmc_id.rsplit("-", 1)[-1])
     except ValueError:
         n = 1
-    return 1.0 + ((n % 7) - 3) * 0.01
+    return 1.0 + ((n % 7) - 3) * 0.05
 
 
 def build_price_quote(farm: Farm, demand_points: list[DemandPoint]) -> PriceQuote | None:

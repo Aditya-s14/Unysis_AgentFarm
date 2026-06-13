@@ -5,7 +5,6 @@ import CropReadyToggle from '@/components/Farmer/CropReadyToggle';
 import WeatherForecastStrip from '@/components/Farmer/WeatherForecastStrip';
 import TruckETACard from '@/components/Farmer/TruckETACard';
 import ArrivalConfirmButton from '@/components/Farmer/ArrivalConfirmButton';
-import FarmerCommitmentPanel from '@/components/Farmer/FarmerCommitmentPanel';
 import PriceDiscoveryBoard from '@/components/Farmer/PriceDiscoveryBoard';
 import FarmEconomicsPanel from '@/components/Farmer/FarmEconomicsPanel';
 import withAuth from '@/components/withAuth';
@@ -110,8 +109,7 @@ function FarmerPage() {
         subtitle={farm ? `${farm.crop_type} · ${farm.acreage} acres` : 'Farmer Dashboard'}
       >
         <div className="space-y-6">
-          <FarmerCommitmentPanel />
-          <PriceDiscoveryBoard />
+          <PriceDiscoveryBoard farmId={farmId} />
 
           {stock && (
             <div
@@ -140,7 +138,7 @@ function FarmerPage() {
           <TruckETACard farmId={farmId} rawRoutes={rawRoutes} />
           <ArrivalConfirmButton runId={runId} farmId={farmId} />
           <WeatherForecastStrip weatherPanel={weatherPanel} />
-          <FarmEconomicsPanel />
+          <FarmEconomicsPanel farmId={farmId} />
 
           {farm && (
             <div

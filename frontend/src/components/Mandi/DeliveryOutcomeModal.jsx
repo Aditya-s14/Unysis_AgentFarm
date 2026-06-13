@@ -72,7 +72,9 @@ export default function DeliveryOutcomeModal({
 
   const [demandActual, setDemandActual] = useState(String(draft.demand_actual));
   const [wasteActual, setWasteActual] = useState(String(draft.waste_kg_actual));
-  const [deliveryActual, setDeliveryActual] = useState(String(draft.delivery_time_actual_hours));
+  const [deliveryActual, setDeliveryActual] = useState(
+    () => Number(draft.delivery_time_actual_hours).toFixed(2),
+  );
   const [notes, setNotes] = useState(draft.notes || '');
   const [error, setError] = useState(null);
 
@@ -118,7 +120,8 @@ export default function DeliveryOutcomeModal({
           Confirm delivery
         </p>
         <p className="text-muted mb-5" style={{ fontSize: '11px', lineHeight: 1.5 }}>
-          Log actual outcome for {mandiRow.name} — feeds Tier-2 demand bias correction on the next run.
+          Record actual kg delivered, waste, and delivery time for {mandiRow.name}. This feeds Tier-2
+          demand bias correction on the next run.
         </p>
 
         <div className="grid grid-cols-2 gap-4 mb-5 p-4" style={{ background: 'var(--bg)', borderRadius: '2px' }}>
@@ -150,7 +153,7 @@ export default function DeliveryOutcomeModal({
             value={deliveryActual}
             onChange={setDeliveryActual}
             unit="hrs"
-            step="0.1"
+            step="0.01"
           />
           <label className="block">
             <span

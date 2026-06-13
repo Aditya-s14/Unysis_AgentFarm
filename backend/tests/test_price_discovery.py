@@ -76,16 +76,21 @@ def _demand_points() -> list[DemandPoint]:
     ]
 
 
-def test_private_offer_exceeds_apmc_all_crops():
+def test_private_premium_mixed_by_crop():
+    """Tomato/onion retain direct premium; mango/banana can discount vs APMC (D3 realism)."""
     import tools.price_discovery as pd
 
     pd._CROP_PRICES = None
     prices = load_crop_prices()
     dps = _demand_points()
-    for crop in prices:
+    for crop in ("tomato", "onion"):
         q = build_price_quote(_farm(crop=crop), dps)
         assert q is not None
         assert q.private_offer_per_kg > q.apmc_price_per_kg
+    for crop in ("mango", "banana"):
+        q = build_price_quote(_farm(crop=crop), dps)
+        assert q is not None
+        assert q.private_offer_per_kg < q.apmc_price_per_kg
 
 
 def test_build_price_quote_has_apmc_and_private_ids():
