@@ -1,0 +1,363 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import 'leaflet/dist/leaflet.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* ── Backgrounds ────────────────────────────────────────────────────────── */
+  --bg:            #0a1628;
+  --bg-subtle:     #0f1f38;
+  --bg-card:       #132540;
+  --bg-card-hover: #162d4a;
+  --bg-elevated:   #1a2f50;
+  --border:        #1e3a5c;
+  --border-hover:  #2d5a8a;
+
+  /* ── Accent (green — agriculture + positive) ───────────────────────────── */
+  --accent:        #22c55e;
+  --accent-hover:  #16a34a;
+  --accent-light:  #86efac;
+  --accent-muted:  rgba(34, 197, 94, 0.10);
+  --accent-glow:   rgba(34, 197, 94, 0.20);
+
+  /* ── Text ───────────────────────────────────────────────────────────────── */
+  --navy:          #f8fafc;
+  --navy-light:    #e2e8f0;
+  --text:          #e2e8f0;
+  --text-secondary:#94a3b8;
+  --text-tertiary: #64748b;
+  --text-inverse:  #0a1628;
+
+  /* ── Semantic status colors (bright for dark bg — all ≥7:1 contrast) ───── */
+  --green-ok:      #4ade80;
+  --green-muted:   rgba(74, 222, 128, 0.10);
+  --red-risk:      #f87171;
+  --red-muted:     rgba(248, 113, 113, 0.10);
+  --blue-mandi:    #60a5fa;
+  --blue-muted:    rgba(96, 165, 250, 0.10);
+  --purple-log:    #c084fc;
+  --purple-muted:  rgba(192, 132, 252, 0.10);
+  --orange-dmd:    #fb923c;
+  --orange-muted:  rgba(251, 146, 60, 0.10);
+  --cyan-info:     #67e8f9;
+  --cyan-muted:    rgba(103, 232, 249, 0.10);
+
+  /* ── Alias: --danger maps to --red-risk (fixes undefined var across codebase) */
+  --danger:        #f87171;
+
+  /* ── Glass / surface ────────────────────────────────────────────────────── */
+  --glass-bg:      rgba(19, 37, 64, 0.80);
+  --glass-border:  rgba(255, 255, 255, 0.08);
+
+  /* ── Shadows ────────────────────────────────────────────────────────────── */
+  --shadow-sm:     0 1px 4px rgba(0, 0, 0, 0.4);
+  --shadow-md:     0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg:     0 8px 32px rgba(0, 0, 0, 0.6);
+  --shadow-card:   0 4px 24px rgba(0, 0, 0, 0.5);
+  --shadow-glow:   0 0 20px rgba(34, 197, 94, 0.15);
+
+  /* ── Layout ─────────────────────────────────────────────────────────────── */
+  --sidebar-width:      260px;
+  --sidebar-collapsed:  72px;
+  --muted:              var(--text-tertiary);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ── Headings use Space Grotesk ─────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 600;
+  color: var(--navy);
+  line-height: 1.2;
+}
+
+/* ── Legacy .font-serif / .font-syne → Space Grotesk (preserves existing classnames) */
+.font-serif {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 700;
+}
+
+.font-syne {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  letter-spacing: 0.01em;
+  font-weight: 600;
+}
+
+.tracking-wider-2 {
+  letter-spacing: 0.15em;
+}
+
+/* ── Skeleton shimmer ───────────────────────────────────────────────────── */
+.metric-skeleton {
+  display: inline-block;
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--border) 25%,
+    rgba(255, 255, 255, 0.06) 50%,
+    var(--border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  background: var(--accent);
+  color: #052e16;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 0 0 var(--accent-glow);
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.25);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+
+/* ── Dark card (replaces glassmorphism — better performance + legibility) ── */
+.glass-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.glass-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.glass-card-static {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+}
+
+/* ── "bg-card" Tailwind utility ─────────────────────────────────────────── */
+.bg-card {
+  background-color: var(--bg-card);
+}
+
+/* ── Pulsing live dot ───────────────────────────────────────────────────── */
+.dot-live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green-ok);
+  animation: dot-pulse 2s ease-in-out infinite;
+}
+
+/* ── Section label ──────────────────────────────────────────────────────── */
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+/* ── Staggered entrance ─────────────────────────────────────────────────── */
+.stagger-children > * {
+  animation: slide-up 0.5s ease-out both;
+}
+.stagger-children > :first-child   { animation-delay: 0.05s; }
+.stagger-children > :nth-child(2)  { animation-delay: 0.10s; }
+.stagger-children > :nth-child(3)  { animation-delay: 0.15s; }
+.stagger-children > :nth-child(4)  { animation-delay: 0.20s; }
+.stagger-children > :nth-child(5)  { animation-delay: 0.25s; }
+.stagger-children > :nth-child(6)  { animation-delay: 0.30s; }
+
+/* ── Keyframes ──────────────────────────────────────────────────────────── */
+@keyframes bounce {
+  0%, 100% { transform: translateY(-25%); animation-timing-function: cubic-bezier(0.8,0,1,1); }
+  50% { transform: none; animation-timing-function: cubic-bezier(0,0,0.2,1); }
+}
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.4); }
+  50%       { opacity: 0.7; box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-6px); }
+}
+@keyframes spin-slow {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes slide-up {
+  0%   { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes scale-in {
+  0%   { opacity: 0; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes gradient-shift {
+  0%   { background-position: 0 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+@keyframes pulse-ring {
+  0%   { transform: scale(0.9); opacity: 0.7; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes agent-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(1.3); }
+}
+@keyframes truck-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@keyframes mesh-move {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  33%  { transform: translate(30px, -20px) rotate(60deg); }
+  66%  { transform: translate(-20px, 30px) rotate(120deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+/* ── Animation utilities ────────────────────────────────────────────────── */
+.animate-shimmer   { animation: shimmer   1.5s ease-in-out infinite; }
+.animate-slide-up  { animation: slide-up  0.5s ease-out both; }
+.animate-fade-in   { animation: fade-in   0.3s ease-out both; }
+.animate-scale-in  { animation: scale-in  0.3s ease-out both; }
+.animate-float     { animation: float     3s   ease-in-out infinite; }
+.animate-spin-slow { animation: spin-slow 3s   linear infinite; }
+
+/* ── Scrollbars ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+::selection {
+  background: rgba(34, 197, 94, 0.25);
+  color: var(--navy);
+}
+
+/* ── Leaflet (dark theme) ───────────────────────────────────────────────── */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background: var(--bg-subtle);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--bg-elevated) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+.leaflet-popup-content {
+  margin: 12px 16px;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+}
+.leaflet-popup-close-button {
+  color: var(--text-tertiary) !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(10, 22, 40, 0.85) !important;
+  color: var(--text-tertiary) !important;
+  font-size: 10px !important;
+}
+.leaflet-control-attribution a {
+  color: var(--accent) !important;
+}
+
+.leaflet-bar a,
+.leaflet-bar a:focus {
+  background: var(--bg-card) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+.leaflet-bar a:hover {
+  background: var(--bg-elevated) !important;
+  color: var(--accent) !important;
+}

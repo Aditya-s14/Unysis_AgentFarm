@@ -1,5 +1,6 @@
 """Route deviation alert persistence via run_logs."""
 
+
 from __future__ import annotations
 
 from typing import Any
