@@ -180,7 +180,9 @@ def compute_farm_economics(
         margin_delta = round(direct_net - apmc_net, 2)
 
         if stock.farm_id in accepted:
-            recommendation = "direct_accepted"
+            acc = accepted[stock.farm_id]
+            channel = getattr(acc, "channel", "private") or "private"
+            recommendation = "direct_accepted" if channel == "private" else "apmc_accepted"
         elif apmc_net < direct_net:
             recommendation = "switch_to_direct"
         else:

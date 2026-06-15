@@ -37,6 +37,8 @@ async def report_breakdown(
     report: BreakdownReport,
 ) -> ReplanPreview:
     """Report a truck breakdown, partial re-plan, and return preview."""
+    if report.report_only:
+        return await intake_breakdown_report(run_id, report)
     _ensure_enabled()
 
     plan = await get_plan_by_run_id(run_id)
@@ -124,6 +126,185 @@ async def report_breakdown(
         incident=incident,
         affected_farms=incident.pending_farm_ids,
         spare_truck_id=incident.spare_truck_id,
+        validation_valid=validation.valid,
+        validation_errors=list(validation.errors),
+    )
+
+    if get_settings().BREAKDOWN_AUTO_NOTIFY:
+        return await approve_breakdown_incident(run_id, incident_id, preview=preview)
+
+    return preview
+
+
+async def intake_breakdown_report(
+    run_id: str,
+    report: BreakdownReport,
+) -> ReplanPreview:
+    """Driver (or FPO) reports a breakdown without changing routes — FPO replans later."""
+    _ensure_enabled()
+
+    plan = await get_plan_by_run_id(run_id)
+    if plan is None:
+        raise BreakdownError(f"Run {run_id!r} not found", status_code=404)
+
+    if plan.notifications_dispatched_at is None:
+        raise BreakdownError(
+            "Notifications not yet dispatched — approve the plan before reporting breakdown",
+            status_code=409,
+        )
+
+    detail = await get_plan_run_detail(run_id)
+    if detail is None:
+        raise BreakdownError(
+            "Run detail not found; cannot record breakdown report",
+            status_code=404,
+        )
+
+    try:
+        state = rebuild_state_from_snapshot(run_id=run_id, plan=plan, detail=detail)
+    except ValueError as exc:
+        raise BreakdownError(str(exc), status_code=422) from exc
+
+    from models.schemas import RoutePlan
+
+    state["route_plan"] = RoutePlan.model_validate(plan.route_plan_json or {})
+    route_plan_snapshot = state["route_plan"].model_dump()
+
+    existing = await list_incidents(run_id)
+    if report.truck_id in broken_truck_ids(existing):
+        raise BreakdownError(
+            f"Truck {report.truck_id!r} already has an active breakdown incident",
+            status_code=409,
+        )
+
+    incident_id = str(uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    incident = BreakdownIncident(
+        incident_id=incident_id,
+        run_id=run_id,
+        truck_id=report.truck_id,
+        reported_by=report.reported_by,
+        reason=report.reason,
+        status="reported",
+        completed_farm_ids=list(report.completed_farm_ids),
+        pending_farm_ids=[],
+        spare_truck_id=None,
+        route_plan_before=route_plan_snapshot,
+        route_plan_after=route_plan_snapshot,
+        validation=None,
+        created_at=now,
+    )
+
+    await create_run_log(
+        run_id=run_id,
+        message=INCIDENT_LOG_MESSAGE,
+        level="warning",
+        plan_id=plan.id,
+        detail=incident.model_dump(mode="json"),
+    )
+
+    logger.info(
+        "breakdown reported (no replan) run_id=%s truck=%s by=%s",
+        run_id,
+        report.truck_id,
+        report.reported_by,
+    )
+
+    return ReplanPreview(
+        incident=incident,
+        affected_farms=[],
+        spare_truck_id=None,
+        validation_valid=True,
+        validation_errors=[],
+    )
+
+
+async def replan_reported_incident(
+    run_id: str,
+    incident_id: str,
+    *,
+    completed_farm_ids: list[str] | None = None,
+    spare_truck_id: str | None = None,
+) -> ReplanPreview:
+    """FPO replans after a driver submitted a report-only breakdown."""
+    _ensure_enabled()
+
+    incident = await get_incident(run_id, incident_id)
+    if incident is None:
+        raise BreakdownError(f"Incident {incident_id!r} not found", status_code=404)
+    if incident.status != "reported":
+        raise BreakdownError(
+            "Only reported breakdowns awaiting replan can be replanned",
+            status_code=409,
+        )
+
+    plan = await get_plan_by_run_id(run_id)
+    if plan is None:
+        raise BreakdownError(f"Run {run_id!r} not found", status_code=404)
+
+    detail = await get_plan_run_detail(run_id)
+    if detail is None:
+        raise BreakdownError(
+            "Run detail not found; cannot rebuild replan context",
+            status_code=404,
+        )
+
+    try:
+        state = rebuild_state_from_snapshot(run_id=run_id, plan=plan, detail=detail)
+    except ValueError as exc:
+        raise BreakdownError(str(exc), status_code=422) from exc
+
+    from models.schemas import RoutePlan, ValidationResult
+
+    state["route_plan"] = RoutePlan.model_validate(plan.route_plan_json or {})
+    if plan.validation_json:
+        state["validation_result"] = ValidationResult.model_validate(plan.validation_json)
+
+    farms_done = list(completed_farm_ids if completed_farm_ids is not None else incident.completed_farm_ids)
+    route_plan_before = state["route_plan"].model_dump()
+    try:
+        merged, validation, meta = await execute_partial_replan(
+            state,
+            broken_truck_id=incident.truck_id,
+            completed_farm_ids=farms_done,
+            spare_truck_id=spare_truck_id,
+        )
+    except ValueError as exc:
+        raise BreakdownError(str(exc), status_code=422) from exc
+
+    route_plan_after = merged.model_dump()
+    now = datetime.now(timezone.utc).isoformat()
+    updated = incident.model_copy(
+        update={
+            "status": "pending_approval",
+            "completed_farm_ids": farms_done,
+            "pending_farm_ids": list(meta.get("pending_farm_ids") or []),
+            "spare_truck_id": meta.get("spare_truck_id"),
+            "route_plan_before": route_plan_before,
+            "route_plan_after": route_plan_after,
+            "validation": validation,
+            "created_at": incident.created_at or now,
+        },
+    )
+
+    await update_plan_routes(
+        plan.id,
+        route_plan_json=route_plan_after,
+        validation_json=validation.model_dump(),
+    )
+
+    await create_run_log(
+        run_id=run_id,
+        message=INCIDENT_LOG_MESSAGE,
+        level="warning" if not validation.valid else "info",
+        plan_id=plan.id,
+        detail=updated.model_dump(mode="json"),
+    )
+
+    preview = ReplanPreview(
+        incident=updated,
+        affected_farms=updated.pending_farm_ids,
+        spare_truck_id=updated.spare_truck_id,
         validation_valid=validation.valid,
         validation_errors=list(validation.errors),
     )

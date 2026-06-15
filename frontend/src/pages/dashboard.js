@@ -1343,12 +1343,12 @@ function WasteBarChart({ kpis }) {
           <BarChart data={data} barCategoryGap="40%" margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
             <XAxis
               dataKey="label"
-              tick={{ fill: 'var(--muted)', fontFamily: 'DM Mono', fontSize: 11 }}
+              tick={{ fill: 'var(--muted)', fontFamily: 'IBM Plex Sans', fontSize: 11 }}
               axisLine={{ stroke: 'var(--border)' }}
               tickLine={false}
             />
             <YAxis
-              tick={{ fill: 'var(--muted)', fontFamily: 'DM Mono', fontSize: 10 }}
+              tick={{ fill: 'var(--muted)', fontFamily: 'IBM Plex Sans', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => `${v} kg`}

@@ -102,13 +102,21 @@ async def accept_private_offer(body: PriceOfferAcceptance) -> dict:
     if quote is None:
         raise HTTPException(status_code=422, detail="cannot build quote for farm")
 
+    channel = body.channel or "private"
+    if channel not in ("apmc", "private"):
+        raise HTTPException(status_code=422, detail="channel must be apmc or private")
+
+    price_per_kg = (
+        quote.apmc_price_per_kg if channel == "apmc" else quote.private_offer_per_kg
+    )
     acceptance = body.model_copy(
         update={
             "crop_type": quote.crop_type,
             "apmc_demand_point_id": quote.apmc_demand_point_id,
             "private_demand_point_id": quote.private_demand_point_id,
-            "accepted_price_per_kg": quote.private_offer_per_kg,
+            "accepted_price_per_kg": price_per_kg,
             "tonnage_kg": body.tonnage_kg or quote.tonnage_kg,
+            "channel": channel,
         },
     )
     saved, created = await save_acceptance(acceptance)

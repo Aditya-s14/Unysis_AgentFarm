@@ -52,8 +52,8 @@ export default function RoutePolyline({
     <>
       <Polyline positions={positions} pathOptions={pathOptions}>
         <Popup>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12 }}>
-            <p style={{ margin: 0, color: ACCENT, fontFamily: 'Syne, sans-serif', fontWeight: 700 }}>
+          <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12 }}>
+            <p style={{ margin: 0, color: ACCENT, fontFamily: ''IBM Plex Sans', sans-serif', fontWeight: 700 }}>
               Truck {route.truckId || route.id}
             </p>
             <p style={{ margin: '4px 0 0', color: 'var(--muted)' }}>{route.stops.length} stops</p>
@@ -77,7 +77,7 @@ export default function RoutePolyline({
             pathOptions={{ color, fillColor: color, fillOpacity: 0.9, weight: 1.5 }}
           >
             <Popup>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11 }}>
+              <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 11 }}>
                 <p style={{ margin: 0, color, fontWeight: 700 }}>{risk === 'severe' ? 'SEVERE RISK' : 'WEATHER WARNING'}</p>
                 <p style={{ margin: '2px 0 0', color: 'var(--muted)' }}>{s.label}</p>
               </div>
