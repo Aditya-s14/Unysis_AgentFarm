@@ -12,6 +12,86 @@ export function normalizeWeatherSource(summary) {
  * Resolve weather panel payload from cached scenario response only.
  * Returns `{ unavailable: true }` when `weather_summary` is absent — no invented copy.
  */
+export function resolveFarmWeatherReading(cached, farmId) {
+  if (!cached || !farmId) return null;
+
+  const readings = cached.weather_snapshot?.farm_readings;
+  if (Array.isArray(readings)) {
+    const found = readings.find((r) => r.farm_id === farmId);
+    if (found) return found;
+  }
+
+  const events = cached.weather_events ?? cached.weather_snapshot?.weather_events ?? [];
+  if (!Array.isArray(events)) return null;
+
+  const event = events.find((e) => e?.farm_id === farmId);
+  if (!event) {
+    const farms = cached.farms;
+    if (Array.isArray(farms)) {
+      const idx = farms.findIndex((f) => f.id === farmId);
+      if (idx >= 0 && idx < events.length) {
+        return buildReadingFromEvent(farmId, events[idx], cached.weather_risk_summary);
+      }
+    }
+    return null;
+  }
+
+  return buildReadingFromEvent(farmId, event, cached.weather_risk_summary);
+}
+
+function buildReadingFromEvent(farmId, event, riskSummary) {
+  const desc = String(event.description || '');
+  const precip = event.precipitation_mm != null ? Number(event.precipitation_mm) : null;
+  const rainMatch = desc.match(/rain=([\d.]+)\s*mm/i);
+  const tempMatch = desc.match(/temp(?:_moderate)?=([\d.]+)\s*C/i);
+  const rainMm = rainMatch ? Number(rainMatch[1]) : (Number.isFinite(precip) ? precip : null);
+  const tempC = tempMatch ? Number(tempMatch[1]) : null;
+
+  return {
+    farm_id: farmId,
+    temp_c: tempC,
+    rain_mm: rainMm,
+    precipitation_mm: precip,
+    severity: riskSummary?.[farmId] || event.severity || 'normal',
+    description: desc,
+    humidity_pct: event.humidity_pct ?? null,
+    wind_speed_ms: event.wind_speed_ms ?? null,
+  };
+}
+
+export function farmRainLabel(rainMm) {
+  if (rainMm == null) return null;
+  const v = Number(rainMm);
+  if (!Number.isFinite(v)) return null;
+  if (v === 0) return { label: 'Dry', detail: '0 mm expected' };
+  const mm = v % 1 === 0 ? String(v) : v.toFixed(1);
+  if (v < 2.5) return { label: 'Light rain', detail: `${mm} mm` };
+  if (v < 10) return { label: 'Rain', detail: `${mm} mm` };
+  return { label: 'Heavy rain', detail: `${mm} mm` };
+}
+
+export function farmConditionFromReading(reading) {
+  if (!reading) return 'partly_cloudy';
+  const rain = Number(reading.rain_mm ?? reading.precipitation_mm ?? 0);
+  const temp = Number(reading.temp_c ?? 0);
+  if (rain >= 10) return 'heavy_rain';
+  if (rain >= 2.5) return 'rain';
+  if (temp >= 34) return 'heat_wave';
+  if (rain > 0) return 'partly_cloudy';
+  if (temp >= 30) return 'sunny';
+  return 'clear';
+}
+
+export function formatFarmSeverity(severity) {
+  const key = String(severity || 'normal').toLowerCase();
+  if (key === 'severe') return 'Severe';
+  if (key === 'warning') return 'Warning';
+  if (key === 'moderate') return 'Moderate';
+  if (key === 'high') return 'High';
+  if (key === 'low' || key === 'normal') return 'Normal';
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
 export function resolveWeatherPanel(cached) {
   if (!cached) return null;
 
@@ -143,7 +223,7 @@ export function formatReadingAge(isoTimestamp) {
 export function riskColor(level) {
   if (level == null || level === '') return 'var(--muted)';
   const l = String(level).toLowerCase();
-  if (l === 'high') return 'var(--red-risk)';
-  if (l === 'moderate') return '#FF9800';
+  if (l === 'severe' || l === 'high') return 'var(--red-risk)';
+  if (l === 'warning' || l === 'moderate') return 'var(--harvest-gold)';
   return 'var(--green-ok)';
 }

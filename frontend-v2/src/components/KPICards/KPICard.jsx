@@ -1,6 +1,6 @@
 /**
  * KPICard — mission-control metric tile.
- * Top accent bar, Syne big number, DM Mono uppercase label.
+ * Top accent bar, heading weight number, uppercase label.
  *
  * Props:
  *   title                 short uppercase label

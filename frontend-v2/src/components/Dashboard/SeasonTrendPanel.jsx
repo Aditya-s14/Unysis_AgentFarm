@@ -77,20 +77,20 @@ function TrendChart({ seasons, metricKey, label, unit, color, subtitle }) {
           <BarChart data={data} barCategoryGap="25%" margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <XAxis
               dataKey="season"
-              tick={{ fill: 'var(--muted)', fontFamily: 'DM Mono', fontSize: 9 }}
+              tick={{ fill: 'var(--muted)', fontFamily: 'IBM Plex Sans', fontSize: 9 }}
               axisLine={{ stroke: 'var(--border)' }}
               tickLine={false}
               interval={0}
             />
             <YAxis
               domain={[0, 100]}
-              tick={{ fill: 'var(--muted)', fontFamily: 'DM Mono', fontSize: 9 }}
+              tick={{ fill: 'var(--muted)', fontFamily: 'IBM Plex Sans', fontSize: 9 }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => `${v}%`}
               width={36}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--bg-subtle)' }} />
             <Bar dataKey="value" radius={[2, 2, 0, 0]}>
               {data.map((entry) => (
                 <Cell key={entry.season} fill={color} />

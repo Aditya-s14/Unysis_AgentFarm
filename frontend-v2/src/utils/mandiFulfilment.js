@@ -26,7 +26,9 @@ function resolveExpectedDemand(dp, cached) {
 }
 
 function resolveCurrentStock(dp) {
-  const raw = dp.current_stock_kg ?? dp.current_stock;
+  const demo = DEMO_DEMAND_POINTS.find((d) => d.id === dp.id);
+  const raw = dp.current_stock_kg ?? dp.current_stock
+    ?? demo?.current_stock_kg ?? demo?.current_stock;
   if (raw == null || raw === undefined) {
     if (typeof window !== 'undefined' && !_stockFallbackWarned) {
       // eslint-disable-next-line no-console
@@ -79,14 +81,14 @@ function computeIncomingByMandi(rawRoutes, atRiskMap) {
 function getFulfilmentStatus(fulfilmentPct) {
   if (fulfilmentPct < 50) return { label: 'CRITICAL SHORTAGE', color: 'var(--red-risk)' };
   if (fulfilmentPct < 80) return { label: 'SHORTAGE', color: 'var(--red-risk)' };
-  if (fulfilmentPct < 100) return { label: 'NEARLY MET', color: '#FF9800' };
+  if (fulfilmentPct < 100) return { label: 'NEARLY MET', color: 'var(--harvest-gold)' };
   if (fulfilmentPct <= 110) return { label: 'SUPPLY MET', color: 'var(--green-ok)' };
   return { label: 'EXCESS', color: 'var(--blue-mandi)' };
 }
 
 function fulfilmentBarColor(pct) {
   if (pct > 100) return 'var(--green-ok)';
-  if (pct >= 80) return '#FF9800';
+  if (pct >= 80) return 'var(--harvest-gold)';
   return 'var(--red-risk)';
 }
 

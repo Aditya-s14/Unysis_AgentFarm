@@ -102,39 +102,71 @@ function computeTotalIncoming(rawRoutes) {
   return Object.values(byMandi).reduce((s, v) => s + v, 0);
 }
 
+/** Max predicted delivery duration (hours) for a specific truck route to this mandi. */
+export function resolveDeliveryPredictedHoursForTruck(mandiId, truckId, rawRoutes) {
+  const route = (rawRoutes || []).find((r) => r.truck_id === truckId);
+  if (!route) return resolveDeliveryPredictedHours(mandiId, rawRoutes);
+
+  const servesMandi = (route.stops || []).some((s) => s.demand_point_id === mandiId);
+  if (!servesMandi) return resolveDeliveryPredictedHours(mandiId, rawRoutes);
+
+  const minutes = Number(route.duration_minutes);
+  if (Number.isFinite(minutes) && minutes > 0) {
+    return Math.round((minutes / 60) * 100) / 100;
+  }
+  const km = Number(route.distance_km);
+  if (Number.isFinite(km) && km > 0) {
+    return Math.round((km / 40) * 100) / 100;
+  }
+  return resolveDeliveryPredictedHours(mandiId, rawRoutes);
+}
+
+function truckShare(mandiRow, truck) {
+  if (!mandiRow?.incomingSupply || !truck?.load_kg) return 1;
+  return Math.min(1, Number(truck.load_kg) / mandiRow.incomingSupply);
+}
+
 /**
  * Build outcome fields for modal preview and API submit (without plan_id).
  */
 export function buildMandiOutcomeDraft({
   cached,
   mandiRow,
+  truck,
   rawRoutes,
   farms,
   actualOverrides = {},
 }) {
-  const demandPredicted = resolveDemandPredicted(mandiRow, cached);
+  const share = truck ? truckShare(mandiRow, truck) : 1;
+  const demandPredicted = Math.round(resolveDemandPredicted(mandiRow, cached) * share);
   const demandActual = actualOverrides.demand_actual != null
     ? Number(actualOverrides.demand_actual)
-    : mandiRow.incomingSupply;
+    : (truck?.load_kg ?? mandiRow.incomingSupply);
 
   const totalIncoming = computeTotalIncoming(rawRoutes);
   const wastePredicted = estimateWasteShare(
     cached?.kpis,
-    mandiRow.incomingSupply,
+    truck?.load_kg ?? mandiRow.incomingSupply,
     totalIncoming,
   );
-  const defaultWasteActual = Math.max(0, mandiRow.expectedDemand - mandiRow.incomingSupply);
+  const defaultWasteActual = Math.max(
+    0,
+    Math.round((mandiRow.expectedDemand - mandiRow.incomingSupply) * share),
+  );
   const wasteActual = actualOverrides.waste_kg_actual != null
     ? Number(actualOverrides.waste_kg_actual)
     : defaultWasteActual;
 
-  const deliveryPredicted = resolveDeliveryPredictedHours(mandiRow.id, rawRoutes);
+  const deliveryPredicted = truck
+    ? resolveDeliveryPredictedHoursForTruck(mandiRow.id, truck.truck_id, rawRoutes)
+    : resolveDeliveryPredictedHours(mandiRow.id, rawRoutes);
   const deliveryActual = actualOverrides.delivery_time_actual_hours != null
     ? Number(actualOverrides.delivery_time_actual_hours)
     : Math.round((deliveryPredicted + 0.2) * 100) / 100;
 
   const dayOfWeek = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
   const cropType = resolveDominantCrop(mandiRow.id, rawRoutes, farms);
+  const truckLabel = truck?.truck_id ? ` · ${truck.truck_id}` : '';
 
   return {
     waste_kg_predicted: Math.round(wastePredicted * 10) / 10,
@@ -147,7 +179,8 @@ export function buildMandiOutcomeDraft({
     crop_type: cropType,
     day_of_week: dayOfWeek,
     notes: actualOverrides.notes
-      ?? `UI delivery confirmation for ${mandiRow.name}`,
+      ?? `UI delivery confirmation for ${mandiRow.name}${truckLabel}`,
+    truck_id: truck?.truck_id ?? null,
   };
 }
 
@@ -155,6 +188,7 @@ export function buildMandiOutcomeDraft({
 export async function buildMandiOutcomePayload({
   cached,
   mandiRow,
+  truck,
   rawRoutes,
   farms,
   runId,
@@ -164,6 +198,7 @@ export async function buildMandiOutcomePayload({
   const draft = buildMandiOutcomeDraft({
     cached,
     mandiRow,
+    truck,
     rawRoutes,
     farms,
     actualOverrides,

@@ -88,6 +88,12 @@ export async function reportBreakdown(runId, body) {
   return data;
 }
 
+/** POST /api/run/:id/breakdown/:incidentId/replan — FPO replans a driver-reported breakdown. */
+export async function replanBreakdown(runId, incidentId, body) {
+  const { data } = await client.post(`/run/${runId}/breakdown/${incidentId}/replan`, body);
+  return data;
+}
+
 /** POST /api/run/:id/breakdown/:incidentId/approve — approve delta notifications. */
 export async function approveBreakdown(runId, incidentId) {
   const { data } = await client.post(`/run/${runId}/breakdown/${incidentId}/approve`);

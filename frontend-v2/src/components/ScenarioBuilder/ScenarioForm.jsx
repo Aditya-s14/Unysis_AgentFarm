@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import ScenarioTypeSelect from './ScenarioTypeSelect';
+import ScenarioTypeSelect, { ScenarioPipelinePreview } from './ScenarioTypeSelect';
 import useScenario from '@/hooks/useScenario';
 import { getBuyerDemandsForApi } from '@/hooks/useBuyerDemands';
 import { getMarketCommitmentsForApi } from '@/hooks/useMarketOffers';
@@ -69,53 +69,15 @@ export default function ScenarioForm({ onRunStart, onComplete, onError }) {
     }
   };
 
-  const totalCapacity = DEMO_TRUCKS.reduce((s, t) => s + t.capacity_kg, 0);
-
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-card p-6 space-y-6"
-      style={{
-        border: '1px solid var(--border)',
-        borderRadius: '4px',
-      }}
-    >
+    <form onSubmit={handleSubmit} className="space-y-5">
       <ScenarioTypeSelect
         value={scenarioDraft.scenarioType}
         onChange={(val) => setScenarioDraft({ ...scenarioDraft, scenarioType: val })}
+        layout="cards"
       />
 
-      <div
-        className="p-4"
-        style={{
-          background: 'rgba(245, 166, 35, 0.03)',
-          border: '1px solid var(--border)',
-          borderRadius: '4px',
-        }}
-      >
-        <p
-          className="font-mono uppercase mb-2"
-          style={{
-            color: 'var(--accent)',
-            fontSize: '0.65rem',
-            letterSpacing: '0.15em',
-          }}
-        >
-          ▸ Demo Fixture
-        </p>
-        <p className="font-mono text-paper text-[12px] leading-relaxed">
-          <span className="text-accent">{DEMO_FARMS.length}</span>{' '}
-          <span className="text-muted">farms (Karnataka + Maharashtra)</span>{' '}
-          ·{' '}
-          <span className="text-accent">{DEMO_DEMAND_POINTS.length}</span>{' '}
-          <span className="text-muted">mandis</span>{' '}
-          ·{' '}
-          <span className="text-accent">{DEMO_TRUCKS.length}</span>{' '}
-          <span className="text-muted">
-            trucks ({totalCapacity.toLocaleString()} kg total capacity)
-          </span>
-        </p>
-      </div>
+      <ScenarioPipelinePreview />
 
       {error && (
         <div
@@ -123,7 +85,7 @@ export default function ScenarioForm({ onRunStart, onComplete, onError }) {
           style={{
             color: 'var(--red-risk)',
             border: '1px solid var(--red-risk)',
-            background: 'rgba(255, 68, 68, 0.05)',
+            background: 'var(--red-muted)',
             borderRadius: '2px',
           }}
         >
@@ -134,17 +96,18 @@ export default function ScenarioForm({ onRunStart, onComplete, onError }) {
       <button
         type="submit"
         disabled={loading}
-        className="w-full py-3 font-mono uppercase tracking-wider-2 transition disabled:opacity-50"
+        className="w-full py-3.5 font-mono uppercase tracking-wider-2 transition disabled:opacity-50"
         style={{
-          background: 'var(--accent)',
-          color: '#0D1F0F',
+          background: loading ? 'var(--border)' : 'var(--accent)',
+          color: loading ? 'var(--muted)' : 'var(--accent-text)',
           fontSize: '12px',
           fontWeight: 600,
-          borderRadius: '2px',
+          borderRadius: '4px',
           letterSpacing: '0.15em',
+          border: 'none',
         }}
       >
-        {loading ? '◦ Running pipeline…' : 'Run Scenario →'}
+        {loading ? '◦ Running agent pipeline…' : 'Run Scenario →'}
       </button>
     </form>
   );

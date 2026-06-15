@@ -22,9 +22,10 @@ module.exports = {
         orangedmd: 'var(--orange-dmd)',
       },
       fontFamily: {
-        sans:  ['Inter', '-apple-system', 'system-ui', 'sans-serif'],
-        serif: ['"Playfair Display"', 'Georgia', 'serif'],
-        mono:  ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        sans:    ['"IBM Plex Sans"', '-apple-system', 'system-ui', 'sans-serif'],
+        heading: ['"IBM Plex Sans"', '-apple-system', 'system-ui', 'sans-serif'],
+        serif:   ['"IBM Plex Sans"', '-apple-system', 'system-ui', 'sans-serif'],
+        mono:    ['"IBM Plex Sans"', '-apple-system', 'system-ui', 'sans-serif'],
       },
       letterSpacing: {
         'wider-2': '0.15em',

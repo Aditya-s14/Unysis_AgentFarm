@@ -1,4 +1,4 @@
-﻿import Head from 'next/head';
+import Head from 'next/head';
 import { useMemo, useState } from 'react';
 import DashboardLayout from '@/components/Dashboard/DashboardLayout';
 import MandiFulfilmentCard from '@/components/Mandi/MandiFulfilmentCard';
@@ -45,17 +45,35 @@ function MandiPage() {
           <div className="space-y-3">
             {DEMO_DEMAND_POINTS.map((dp) => {
               const row = mandiFulfilment.find((r) => r.id === dp.id);
+              const currentStock = row?.currentStock ?? dp.current_stock_kg ?? 0;
               const trucks = rawRoutes.filter((r) =>
                 (r.stops || []).some((s) => s.demand_point_id === dp.id)
               );
               return (
-                <div key={dp.id} className="p-4 flex items-center justify-between"
+                <div key={dp.id} className="p-4 flex items-center justify-between gap-4"
                   style={{ border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--bg-card)' }}>
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-syne font-bold text-[13px]" style={{ color: 'var(--text)' }}>{dp.name}</p>
-                    <p className="font-mono text-[11px] mt-0.5" style={{ color: 'var(--muted)' }}>
-                      {dp.point_type?.toUpperCase()} · {dp.base_demand_per_day?.toLocaleString()} kg/day
-                      {trucks.length > 0 ? ` · ${trucks.length} truck(s) incoming` : ' · No trucks routed'}
+                    <p className="font-mono text-[11px] mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1" style={{ color: 'var(--muted)' }}>
+                      <span>{dp.point_type?.toUpperCase()} ? {dp.base_demand_per_day?.toLocaleString()} kg/day</span>
+                      <span
+                        className="font-syne font-bold inline-flex items-center px-2 py-0.5"
+                        style={{
+                          fontSize: '11px',
+                          letterSpacing: '0.02em',
+                          borderRadius: '3px',
+                          border: `1px solid ${currentStock > 0 ? 'var(--accent)' : 'var(--red-risk)'}`,
+                          color: currentStock > 0 ? 'var(--accent-light)' : 'var(--red-risk)',
+                          background: currentStock > 0
+                            ? 'var(--orange-muted)'
+                            : 'var(--red-muted)',
+                        }}
+                      >
+                        {currentStock.toLocaleString()} kg stock
+                      </span>
+                      <span>
+                        {trucks.length > 0 ? `${trucks.length} truck(s) incoming` : 'No trucks routed'}
+                      </span>
                     </p>
                   </div>
                   {row ? (
@@ -82,7 +100,7 @@ function MandiPage() {
       </Head>
       <DashboardLayout
         title={mandiInfo?.name || mandiId}
-        subtitle={mandiInfo ? `${mandiInfo.point_type?.toUpperCase()} · ${mandiInfo.base_demand_per_day?.toLocaleString()} kg/day` : 'Mandi Dashboard'}
+        subtitle={mandiInfo ? `${mandiInfo.point_type?.toUpperCase()} ? ${mandiInfo.base_demand_per_day?.toLocaleString()} kg/day` : 'Mandi Dashboard'}
       >
         <MandiContent
           mandiId={mandiId}
@@ -98,11 +116,12 @@ function MandiPage() {
 }
 
 function MandiContent({ mandiId, runId, cached, mandiInfo, fulfilRow, rawRoutes }) {
-  const [outcomeModalMandi, setOutcomeModalMandi] = useState(null);
+  const [outcomeModal, setOutcomeModal] = useState(null);
   const {
     logMandiOutcome,
     logging: outcomeLogging,
     isLogged: isMandiOutcomeLogged,
+    isTruckLogged: isMandiTruckLogged,
   } = useOutcomeLog(runId);
 
   const incomingTrucks = useMemo(() => {
@@ -135,22 +154,25 @@ function MandiContent({ mandiId, runId, cached, mandiInfo, fulfilRow, rawRoutes 
             row={fulfilRow}
             isFirst
             canLogOutcome={(fulfilRow.incomingSupply ?? 0) > 0}
-            isLogged={isMandiOutcomeLogged(mandiId)}
-            onConfirmDelivery={setOutcomeModalMandi}
+            isLogged={isMandiOutcomeLogged}
+            isTruckLogged={isMandiTruckLogged}
+            onConfirmDelivery={(mandiRow, truck) => setOutcomeModal({ mandiRow, truck })}
           />
         </div>
       )}
 
-      {outcomeModalMandi && (
+      {outcomeModal && (
         <DeliveryOutcomeModal
-          mandiRow={outcomeModalMandi}
+          mandiRow={outcomeModal.mandiRow}
+          truck={outcomeModal.truck}
           cached={cached}
           rawRoutes={rawRoutes}
           farms={Array.isArray(cached?.farms) && cached.farms.length ? cached.farms : DEMO_FARMS}
           loading={outcomeLogging}
-          onClose={() => setOutcomeModalMandi(null)}
+          onClose={() => setOutcomeModal(null)}
           onSubmit={(actualOverrides) => logMandiOutcome({
-            mandiRow: outcomeModalMandi,
+            mandiRow: outcomeModal.mandiRow,
+            truck: outcomeModal.truck,
             cached,
             rawRoutes,
             farms: Array.isArray(cached?.farms) && cached.farms.length ? cached.farms : DEMO_FARMS,

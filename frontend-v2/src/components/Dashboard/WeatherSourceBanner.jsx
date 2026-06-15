@@ -28,8 +28,8 @@ export default function WeatherSourceBanner({ weatherSummary }) {
     borderColor = 'var(--accent)';
   } else {
     label = 'Simulated (no API key)';
-    color = '#FF9800';
-    borderColor = '#FF9800';
+    color = 'var(--harvest-gold)';
+    borderColor = 'var(--harvest-gold)';
   }
 
   return (
@@ -40,7 +40,7 @@ export default function WeatherSourceBanner({ weatherSummary }) {
         border: `1px solid ${borderColor}`,
         borderRadius: '2px',
         color,
-        background: 'rgba(0,0,0,0.15)',
+        background: mode === 'synthetic' ? 'var(--orange-muted)' : 'var(--green-muted)',
         letterSpacing: '0.06em',
       }}
     >

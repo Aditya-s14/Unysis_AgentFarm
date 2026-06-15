@@ -11,7 +11,7 @@ export default function ChatMessage({ role, content, error }) {
     padding: '10px 14px',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
-    fontFamily: "'DM Mono', monospace",
+    fontFamily: "'IBM Plex Sans', sans-serif",
     fontSize: '13px',
     lineHeight: 1.55,
   };
@@ -19,7 +19,7 @@ export default function ChatMessage({ role, content, error }) {
   const userStyle = {
     ...baseStyle,
     background: 'var(--accent)',
-    color: '#0D1F0F',
+    color: 'var(--forest)',
     borderRadius: '12px 12px 0 12px',
   };
 

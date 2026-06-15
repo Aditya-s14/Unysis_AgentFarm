@@ -16,7 +16,7 @@ const TOKEN_COOKIE = 'agentfarm_token';
 const ACCESS = {
   '/dashboard': ['fpo'],
   '/scenario': ['fpo'],
-  '/runs': ['fpo', 'driver'],
+  '/runs': ['fpo'],
   '/advisor': ['fpo', 'farmer'],
   '/farmer': ['fpo', 'farmer'],
   '/driver': ['fpo', 'driver'],

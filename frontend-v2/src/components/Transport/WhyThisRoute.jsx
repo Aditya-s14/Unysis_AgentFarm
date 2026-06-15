@@ -37,7 +37,7 @@ export default function WhyThisRoute({ stops, atRiskMap, mandiById, farmsById })
           className="mt-2 px-3 py-2.5"
           style={{
             borderLeft: '3px solid var(--accent)',
-            background: 'rgba(245, 166, 35, 0.04)',
+            background: 'var(--orange-selected)',
             borderRadius: '0 2px 2px 0',
           }}
         >

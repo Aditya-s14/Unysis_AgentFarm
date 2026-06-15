@@ -101,11 +101,19 @@ async def _maybe_notify_farmer(acceptance: PriceOfferAcceptance) -> None:
         return
 
     payout = round(acceptance.accepted_price_per_kg * acceptance.tonnage_kg, 0)
-    body = (
-        f"AgentFarm: {acceptance.farm_id} accepted private offer "
-        f"at Rs {acceptance.accepted_price_per_kg:.0f}/kg "
-        f"({acceptance.tonnage_kg:.0f} kg, est Rs {payout:.0f})."
-    )[:160]
+    channel = getattr(acceptance, "channel", "private") or "private"
+    if channel == "apmc":
+        body = (
+            f"AgentFarm: {acceptance.farm_id} committed to APMC auction "
+            f"at Rs {acceptance.accepted_price_per_kg:.0f}/kg "
+            f"({acceptance.tonnage_kg:.0f} kg, est Rs {payout:.0f})."
+        )[:160]
+    else:
+        body = (
+            f"AgentFarm: {acceptance.farm_id} accepted private offer "
+            f"at Rs {acceptance.accepted_price_per_kg:.0f}/kg "
+            f"({acceptance.tonnage_kg:.0f} kg, est Rs {payout:.0f})."
+        )[:160]
     try:
         msg_id = await provider.send_sms(phone, body)
         await _log_notification(

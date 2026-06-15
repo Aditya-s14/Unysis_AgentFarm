@@ -16,14 +16,14 @@ const AGENT_LABELS = {
 };
 
 const AGENT_COLORS = {
-  orchestrator_entry: '#F5A623',
-  weather_agent: '#2196F3',
-  demand_agent: '#FF9800',
-  inventory_agent: '#4CAF50',
-  logistics_agent: '#9C27B0',
-  validator: '#8A9E8C',
-  orchestrator_exit: '#F5A623',
-  retry_banner: '#E53935',
+  orchestrator_entry: 'var(--harvest-gold)',
+  weather_agent: 'var(--water-blue)',
+  demand_agent: 'var(--harvest-gold)',
+  inventory_agent: 'var(--green-ok)',
+  logistics_agent: 'var(--purple-log)',
+  validator: 'var(--muted)',
+  orchestrator_exit: 'var(--harvest-gold)',
+  retry_banner: 'var(--red-risk)',
 };
 
 const PIPELINE_COMPLETE_MSG =
@@ -216,7 +216,7 @@ export default function SimulationPanel({
             fontSize: '9px',
             letterSpacing: '0.12em',
             color: 'var(--accent)',
-            border: '1px solid rgba(245, 166, 35, 0.4)',
+            border: '1px solid var(--harvest-gold)',
             borderRadius: '2px',
             padding: '4px 8px',
           }}
@@ -336,10 +336,10 @@ function OrchestratorGroup({ children }) {
   return (
     <div
       style={{
-        border: '1px solid rgba(245, 166, 35, 0.25)',
+        border: '1px solid var(--border)',
         borderLeft: '3px solid var(--accent)',
         borderRadius: '4px',
-        background: 'rgba(245, 166, 35, 0.04)',
+        background: 'var(--orange-muted)',
         padding: '4px',
         display: 'flex',
         flexDirection: 'column',
@@ -411,7 +411,7 @@ function AgentRow({
 
   let borderColor = isPending ? 'var(--border)' : color;
   if (highlight) borderColor = 'var(--red-risk)';
-  if (failHighlight) borderColor = '#FF9800';
+  if (failHighlight) borderColor = 'var(--harvest-gold)';
 
   return (
     <div
@@ -459,7 +459,7 @@ function AgentRow({
           {isDone && tokenCount != null && tokenCount > 0 && (
             <span>{tokenCount} tok</span>
           )}
-          {isDone && <span style={{ color: failHighlight ? '#FF9800' : '#4CAF50', fontWeight: 700 }}>{failHighlight ? '!' : '✓'}</span>}
+          {isDone && <span style={{ color: failHighlight ? 'var(--harvest-gold)' : 'var(--green-ok)', fontWeight: 700 }}>{failHighlight ? '!' : '✓'}</span>}
           {isRunning && <span style={{ color }}>●</span>}
           {isPending && <span style={{ opacity: 0.4 }}>○</span>}
         </div>

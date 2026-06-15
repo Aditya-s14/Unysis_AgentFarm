@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Head from 'next/head';
+import DarkModeToggle from '@/components/Theme/DarkModeToggle';
 import { useAppContext } from '@/context/AppContext';
 
 const AGENT_COLORS = ['var(--accent)', 'var(--blue-mandi)', 'var(--orange-dmd)', 'var(--purple-log)', 'var(--cyan-info)', 'var(--green-ok)'];
@@ -9,27 +10,9 @@ const AGENT_COLORS = ['var(--accent)', 'var(--blue-mandi)', 'var(--orange-dmd)',
 const AGENTS = [
   { tag: '01', title: 'Weather',   body: 'Risk classification per farm via OpenWeather', color: 'var(--blue-mandi)' },
   { tag: '02', title: 'Demand',    body: '7-day mandi forecasts with festival multipliers', color: 'var(--orange-dmd)' },
-  { tag: '03', title: 'Inventory', body: 'Spoilage window tracking & prioritisation', color: 'var(--red-risk)' },
-  { tag: '04', title: 'Logistics', body: 'OR-Tools capacitated VRP optimisation', color: 'var(--purple-log)' },
-  { tag: '05', title: 'Validator', body: 'Rule-based feasibility & retry loop', color: 'var(--cyan-info)' },
-  { tag: '06', title: 'Advisor',   body: 'Plain-language farmer advice (Kisan Mitra)', color: 'var(--accent)' },
-];
-
-const QUOTES = [
-  {
-    body: 'We lose 30–40% of tomatoes between farm and mandi every monsoon. Nobody tells us when to harvest or which market needs supply.',
-    who: 'Smallholder Farmer, Belgaum',
-  },
-  {
-    body: 'I run 10 trucks but dispatch by gut feel. Half the time we reach a mandi that\'s already oversupplied while another one nearby is short.',
-    who: 'Fleet Operator, Karnataka',
-  },
-];
-
-const STATS = [
-  { value: '20',  label: 'Demo Farms',      color: 'var(--accent)' },
-  { value: '35%', label: 'Waste Reduction', color: 'var(--green-ok)' },
-  { value: '<2m', label: 'Per Scenario',    color: 'var(--blue-mandi)' },
+  { tag: '03', title: 'Logistics', body: 'OR-Tools capacitated VRP optimisation', color: 'var(--purple-log)' },
+  { tag: '04', title: 'Validator', body: 'Rule-based feasibility & retry loop', color: 'var(--cyan-info)' },
+  { tag: '05', title: 'Advisor',   body: 'Plain-language farmer advice (Kisan Mitra)', color: 'var(--accent)' },
 ];
 
 const ROLE_HOME = { fpo: '/dashboard', farmer: '/farmer', mandi: '/mandi' };
@@ -50,7 +33,7 @@ export default function HomePage() {
     if (!hydrated || !user) return;
     if (user.role === 'driver') {
       const runId = typeof window !== 'undefined' ? localStorage.getItem('agentfarm_run_id') : null;
-      router.replace(runId ? `/driver/${runId}/${user.entityId}` : '/runs');
+      router.replace(runId ? `/driver/${runId}/${user.entityId}` : '/driver');
     } else {
       router.replace(ROLE_HOME[user.role] || '/dashboard');
     }
@@ -63,21 +46,24 @@ export default function HomePage() {
         <meta name="description" content="Agentic AI for sustainable agri supply chains in India" />
       </Head>
 
-      <div className="min-h-screen overflow-hidden" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+      <div className="min-h-screen overflow-hidden relative" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+        <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 50 }}>
+          <DarkModeToggle variant="header" />
+        </div>
 
         {/* ambient mesh glows */}
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
           <div style={{
             position: 'absolute', top: '-15%', left: '10%',
             width: '50%', height: '50%',
-            background: 'radial-gradient(ellipse, rgba(34,197,94,0.07) 0%, transparent 70%)',
+            background: 'radial-gradient(ellipse, rgba(34,160,107,0.10) 0%, transparent 70%)',
             filter: 'blur(80px)',
             animation: 'mesh-move 20s ease-in-out infinite',
           }} />
           <div style={{
             position: 'absolute', bottom: '-10%', right: '5%',
             width: '40%', height: '40%',
-            background: 'radial-gradient(ellipse, rgba(14,165,233,0.07) 0%, transparent 70%)',
+            background: 'radial-gradient(ellipse, rgba(74,144,226,0.08) 0%, transparent 70%)',
             filter: 'blur(80px)',
             animation: 'mesh-move 25s ease-in-out infinite reverse',
           }} />
@@ -91,11 +77,11 @@ export default function HomePage() {
                 width: 32, height: 32, borderRadius: 8, background: 'var(--accent)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#052e16" strokeWidth="2.5">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5">
                   <path d="M2 22 16 8" /><path d="M16 8c0-4.4-3.6-8-8-8C7 3.3 4 8 4 12c0 5.5 4.5 10 10 10 4.4 0 8-3.6 8-8 0-2.2-.9-4.3-2.3-5.8" />
                 </svg>
               </div>
-              <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--navy)' }}>
+              <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--navy)' }}>
                 AgentFarm
               </span>
             </div>
@@ -132,17 +118,17 @@ export default function HomePage() {
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 24,
             padding: '4px 14px', borderRadius: 100,
-            border: '1px solid rgba(34,197,94,0.3)',
-            background: 'rgba(34,197,94,0.08)',
+            border: '1px solid rgba(34,160,107,0.30)',
+            background: 'rgba(34,160,107,0.10)',
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', fontFamily: "'Space Grotesk',sans-serif", letterSpacing: '0.08em' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', fontFamily: "'IBM Plex Sans', sans-serif", letterSpacing: '0.08em' }}>
               MULTI-AGENT AI FOR AGRICULTURE
             </span>
           </div>
 
           <h1 style={{
-            fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700,
+            fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700,
             fontSize: 'clamp(36px, 6vw, 68px)', lineHeight: 1.1,
             color: 'var(--navy)', letterSpacing: '-0.02em', marginBottom: 24,
           }}>
@@ -152,8 +138,7 @@ export default function HomePage() {
           </h1>
 
           <p style={{ fontSize: 18, color: 'var(--text-secondary)', maxWidth: 560, margin: '0 auto 40px', lineHeight: 1.7 }}>
-            Six AI agents predict disruptions, optimise truck routes, and advise smallholder farmers —
-            cutting perishable waste by up to 35% in under two minutes.
+            Five AI agents predict disruptions, optimise truck routes, and advise smallholder farmers.
           </p>
 
           <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
@@ -167,57 +152,15 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* stats row */}
-        <div className="relative z-10" style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', background: 'var(--bg-subtle)' }}>
-          <div className="max-w-5xl mx-auto px-6 py-10 grid grid-cols-3 gap-8 text-center">
-            {STATS.map(s => (
-              <div key={s.label}>
-                <p style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 38, fontWeight: 700, color: s.color, lineHeight: 1 }}>
-                  {s.value}
-                </p>
-                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* user story */}
-        <section className="relative z-10 max-w-5xl mx-auto px-6 py-24">
-          <div className="text-center" style={{ marginBottom: 48 }}>
-            <p className="section-label" style={{ color: 'var(--accent)', marginBottom: 12 }}>The Problem</p>
-            <h2 style={{
-              fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700,
-              fontSize: 'clamp(24px, 4vw, 40px)', color: 'var(--navy)', lineHeight: 1.2,
-            }}>
-              India loses 30–40% of fresh<br />
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>produce every single year.</span>
-            </h2>
-          </div>
-          <div className="grid md:grid-cols-2 gap-6">
-            {QUOTES.map((q) => (
-              <div key={q.who} style={{
-                background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 14, padding: '28px 32px',
-              }}>
-                <p style={{ fontSize: 32, color: 'var(--accent)', lineHeight: 1, marginBottom: 12, fontFamily: 'Georgia,serif' }}>"</p>
-                <p style={{ fontSize: 15, lineHeight: 1.7, color: 'var(--text)', marginBottom: 16 }}>{q.body}</p>
-                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em' }}>
-                  — {q.who}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-
         {/* how it works */}
         <section className="relative z-10 max-w-5xl mx-auto px-6 pb-24">
           <div className="text-center" style={{ marginBottom: 48 }}>
             <p className="section-label" style={{ color: 'var(--accent)', marginBottom: 12 }}>How It Works</p>
             <h2 style={{
-              fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700,
+              fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700,
               fontSize: 'clamp(24px, 4vw, 40px)', color: 'var(--navy)', lineHeight: 1.2,
             }}>
-              Six Agents, One Optimised Plan
+              Five Agents, One Optimised Plan
             </h2>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 stagger-children">
@@ -236,9 +179,9 @@ export default function HomePage() {
                   background: `rgba(${a.color === 'var(--accent)' ? '34,197,94' : a.color === 'var(--blue-mandi)' ? '96,165,250' : a.color === 'var(--orange-dmd)' ? '251,146,60' : a.color === 'var(--red-risk)' ? '248,113,113' : a.color === 'var(--purple-log)' ? '192,132,252' : '103,232,249'},0.12)`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 600, color: a.color }}>{a.tag}</span>
+                  <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 11, fontWeight: 600, color: a.color }}>{a.tag}</span>
                 </div>
-                <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14, color: 'var(--navy)', marginBottom: 6 }}>{a.title}</p>
+                <p style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 600, fontSize: 14, color: 'var(--navy)', marginBottom: 6 }}>{a.title}</p>
                 <p style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-tertiary)' }}>{a.body}</p>
               </div>
             ))}
@@ -249,10 +192,9 @@ export default function HomePage() {
         <div className="relative z-10" style={{ background: 'var(--bg-subtle)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
           <div className="max-w-5xl mx-auto px-6 py-16 flex flex-col md:flex-row items-center justify-between gap-8">
             <div>
-              <h3 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 26, color: 'var(--navy)', marginBottom: 8 }}>
+              <h3 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700, fontSize: 26, color: 'var(--navy)' }}>
                 Ready to optimise your supply chain?
               </h3>
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Run a scenario in under 2 minutes — no setup required.</p>
             </div>
             <Link href="/scenario" className="btn-primary" style={{ padding: '14px 32px', fontSize: 15, whiteSpace: 'nowrap' }}>
               Get Started <ArrowIcon />

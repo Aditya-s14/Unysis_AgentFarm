@@ -2,6 +2,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
 import { requestOtp, verifyOtp } from '@/api/client';
+import DarkModeToggle from '@/components/Theme/DarkModeToggle';
 import { useAppContext } from '@/context/AppContext';
 
 const DEMO_ACCOUNTS = [
@@ -82,12 +83,15 @@ export default function LoginPage() {
   return (
     <>
       <Head><title>Sign in | AgentFarm</title></Head>
-      <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="min-h-screen flex items-center justify-center px-4 relative" style={{ background: 'var(--brand-gradient)' }}>
+        <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 50 }}>
+          <DarkModeToggle variant="header" />
+        </div>
         <div className="glass-card-static p-8 w-full max-w-md">
           <div className="flex items-center gap-3 mb-6">
             <div
               className="w-9 h-9 rounded-lg flex items-center justify-center"
-              style={{ background: 'var(--accent)', color: '#052e16' }}
+              style={{ background: 'var(--accent)', color: 'var(--accent-text)' }}
             >
               <span className="text-xs font-bold">AF</span>
             </div>
@@ -138,7 +142,7 @@ export default function LoginPage() {
                         border: '1px solid rgba(34,197,94,0.3)',
                         background: 'var(--accent-muted)',
                         cursor: 'pointer',
-                        fontFamily: "'Space Grotesk',sans-serif",
+                        fontFamily: "'IBM Plex Sans', sans-serif",
                         fontWeight: 500,
                       }}
                     >
@@ -203,10 +207,6 @@ export default function LoginPage() {
               {error}
             </p>
           )}
-
-          <p className="mt-5 text-center text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-            API: {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}
-          </p>
         </div>
       </div>
     </>

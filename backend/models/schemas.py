@@ -65,6 +65,7 @@ class PriceOfferAcceptance(BaseModel):
     private_demand_point_id: str
     accepted_price_per_kg: float = Field(gt=0)
     tonnage_kg: float = Field(gt=0)
+    channel: Literal["apmc", "private"] = "private"
     accepted_at: datetime | None = None
 
 
@@ -153,7 +154,7 @@ class MarketAcceptedCommitment(BaseModel):
     accepted_at: datetime
 
 
-EconomicsRecommendation = Literal["switch_to_direct", "stay_apmc", "direct_accepted"]
+EconomicsRecommendation = Literal["switch_to_direct", "stay_apmc", "direct_accepted", "apmc_accepted"]
 
 
 class FarmEconomicsRow(BaseModel):
@@ -362,7 +363,7 @@ BreakdownReason = Literal[
     "other",
 ]
 
-BreakdownIncidentStatus = Literal["pending_approval", "approved", "failed"]
+BreakdownIncidentStatus = Literal["reported", "pending_approval", "approved", "failed"]
 
 
 class BreakdownReport(BaseModel):
@@ -371,6 +372,14 @@ class BreakdownReport(BaseModel):
     truck_id: str
     reported_by: str = "fpo"
     reason: BreakdownReason = "engine_failure"
+    completed_farm_ids: list[str] = Field(default_factory=list)
+    spare_truck_id: str | None = None
+    report_only: bool = False
+
+
+class BreakdownReplanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     completed_farm_ids: list[str] = Field(default_factory=list)
     spare_truck_id: str | None = None
 

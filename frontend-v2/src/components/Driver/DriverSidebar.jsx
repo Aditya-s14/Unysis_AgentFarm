@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useMemo } from 'react';
 import { useAppContext } from '@/context/AppContext';
+import { useTheme } from '@/context/ThemeContext';
+import { getRoleColors } from '@/utils/roleColors';
 
 const SIDEBAR_WIDTH = 'var(--sidebar-width)';
 
 const ROLE_LABELS = { driver: 'Driver' };
-const ROLE_COLORS = { driver: { bg: '#92400e', text: '#fff' } };
 
 const svgProps = {
   width: 20,
@@ -43,6 +45,8 @@ function LogoutIcon() {
 export default function DriverSidebar({ truckLabel = null, routeHref = null }) {
   const router = useRouter();
   const { user, logout } = useAppContext();
+  const { isDark } = useTheme();
+  const rc = useMemo(() => getRoleColors(user?.role, isDark), [user?.role, isDark]);
 
   const handleSignOut = () => {
     logout();
@@ -98,7 +102,7 @@ export default function DriverSidebar({ truckLabel = null, routeHref = null }) {
             className="font-mono uppercase tracking-wider mt-2 inline-block px-2 py-1 rounded"
             style={{
               fontSize: '10px',
-              color: '#4CAF50',
+              color: '#22A06B',
               background: 'rgba(76, 175, 80, 0.12)',
               border: '1px solid rgba(76, 175, 80, 0.35)',
             }}
@@ -135,7 +139,7 @@ export default function DriverSidebar({ truckLabel = null, routeHref = null }) {
             <div className="flex items-center gap-2 mb-1">
               <div
                 className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold flex-shrink-0"
-                style={{ background: ROLE_COLORS.driver.bg, color: '#fff' }}
+                style={{ background: rc.bg, color: rc.text }}
               >
                 {(user.name || user.phone || '?').charAt(0).toUpperCase()}
               </div>
@@ -147,7 +151,7 @@ export default function DriverSidebar({ truckLabel = null, routeHref = null }) {
             </div>
             <span
               className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
-              style={{ background: ROLE_COLORS.driver.bg, color: '#fff' }}
+              style={{ background: rc.bg, color: rc.text }}
             >
               {ROLE_LABELS.driver}
             </span>

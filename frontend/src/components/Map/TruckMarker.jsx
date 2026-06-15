@@ -35,7 +35,7 @@ export default function TruckMarker({ position, isSelected = false }) {
       }}
     >
       <Popup>
-        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12 }}>
+        <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12 }}>
           <p style={{ margin: 0, fontWeight: 700, color: 'var(--accent)' }}>{label}</p>
           <p style={{ margin: '4px 0 0', color: 'var(--muted)' }}>
             Status: {(position.status || 'unknown').replace('_', ' ').toUpperCase()}

@@ -65,18 +65,22 @@ export default function usePriceAcceptance({ onAcceptCommitment } = {}) {
     [accepted],
   );
 
-  const acceptOffer = useCallback(async (quote) => {
+  const acceptOffer = useCallback(async (quote, channel = 'private') => {
     if (!quote?.farm_id) return null;
-    setAcceptingId(quote.farm_id);
+    setAcceptingId(`${quote.farm_id}:${channel}`);
     setError(null);
     try {
+      const pricePerKg = channel === 'apmc'
+        ? quote.apmc_price_per_kg
+        : quote.private_offer_per_kg;
       const body = {
         farm_id: quote.farm_id,
         crop_type: quote.crop_type,
         apmc_demand_point_id: quote.apmc_demand_point_id,
         private_demand_point_id: quote.private_demand_point_id,
-        accepted_price_per_kg: quote.private_offer_per_kg,
+        accepted_price_per_kg: pricePerKg,
         tonnage_kg: quote.tonnage_kg,
+        channel,
       };
       const resp = await acceptPrivateOffer(body);
       const record = resp.acceptance || body;
@@ -85,7 +89,7 @@ export default function usePriceAcceptance({ onAcceptCommitment } = {}) {
         writeStore(next);
         return next;
       });
-      if (onAcceptCommitment) {
+      if (onAcceptCommitment && channel === 'private') {
         onAcceptCommitment(
           quote.farm_id,
           quote.tonnage_kg,

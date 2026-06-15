@@ -4,20 +4,22 @@ import { formatApiError } from '@/utils/api';
 import { displayTruckId } from '@/utils/truckDisplay';
 
 /**
- * Shows pending breakdown incidents and Approve Replan & Notify action.
+ * Shows breakdown incidents for FPO: driver reports awaiting replan, and replans pending approval.
  */
 export default function BreakdownIncidentPanel({
   runId,
   incidents,
   onApproved,
+  onReplanRequest,
 }) {
   const [loadingId, setLoadingId] = useState(null);
   const [error, setError] = useState(null);
 
   if (!runId || !incidents?.length) return null;
 
+  const reported = incidents.filter((i) => i.status === 'reported');
   const pending = incidents.filter((i) => i.status === 'pending_approval');
-  if (!pending.length) return null;
+  if (!reported.length && !pending.length) return null;
 
   const handleApprove = async (incidentId) => {
     setLoadingId(incidentId);
@@ -45,6 +47,39 @@ export default function BreakdownIncidentPanel({
       </p>
 
       <ul className="space-y-4">
+        {reported.map((inc) => (
+          <li
+            key={inc.incident_id}
+            className="p-4"
+            style={{ border: '1px solid rgba(244, 182, 62, 0.35)', borderRadius: '4px', background: 'rgba(244, 182, 62, 0.06)' }}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-syne font-bold text-paper text-[13px]">
+                  {displayTruckId(inc.truck_id)} — {inc.reason?.replace(/_/g, ' ')}
+                </p>
+                <p className="font-mono text-muted text-[11px] mt-1">
+                  Reported by {inc.reported_by || 'driver'} — awaiting FPO replan
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onReplanRequest?.(inc)}
+                disabled={loadingId === inc.incident_id}
+                className="font-syne font-bold uppercase tracking-wider px-4 py-2 disabled:opacity-50 shrink-0"
+                style={{
+                  background: 'var(--accent)',
+                  color: 'var(--accent-text)',
+                  fontSize: '11px',
+                  borderRadius: '4px',
+                }}
+              >
+                Re-plan route
+              </button>
+            </div>
+          </li>
+        ))}
+
         {pending.map((inc) => (
           <li
             key={inc.incident_id}
@@ -62,7 +97,7 @@ export default function BreakdownIncidentPanel({
                   {inc.pending_farm_ids?.length || 0} farm(s) to reassign
                 </p>
                 {!inc.validation?.valid && (
-                  <p className="font-mono text-[11px] mt-2" style={{ color: 'var(--warn)' }}>
+                  <p className="font-mono text-[11px] mt-2" style={{ color: 'var(--harvest-gold)' }}>
                     Validator warnings — review before approving.
                   </p>
                 )}
@@ -74,7 +109,7 @@ export default function BreakdownIncidentPanel({
                 className="font-syne font-bold uppercase tracking-wider px-4 py-2 disabled:opacity-50 shrink-0"
                 style={{
                   background: 'var(--accent)',
-                  color: 'var(--bg)',
+                  color: 'var(--accent-text)',
                   fontSize: '11px',
                   borderRadius: '4px',
                 }}

@@ -23,8 +23,8 @@ export default function MandiMarker({ mandi, riskLevel = 'normal' }) {
       }}
     >
       <Popup>
-        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12 }}>
-          <p style={{ margin: 0, color: 'var(--accent)', fontFamily: 'Syne, sans-serif', fontWeight: 700 }}>
+        <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12 }}>
+          <p style={{ margin: 0, color: 'var(--accent)', fontFamily: ''IBM Plex Sans', sans-serif', fontWeight: 700 }}>
             {mandi.name || `Mandi ${mandi.id}`}
           </p>
           <p style={{ margin: '4px 0 0', color: 'var(--muted)' }}>ID: {mandi.id}</p>

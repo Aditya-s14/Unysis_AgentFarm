@@ -69,7 +69,7 @@ function PostRow({ post, onRemove, removing }) {
 /**
  * Buyer role UI — post crop demand (qty + price) on private DCs.
  */
-export default function BuyerDemandPanel({ compact = false }) {
+export default function BuyerDemandPanel({ compact = false, embedded = false }) {
   const { posts, syncing, postDemand, removePost } = useBuyerDemands();
   const [buyerName, setBuyerName] = useState('');
   const [buyerType, setBuyerType] = useState('restaurant');
@@ -123,12 +123,13 @@ export default function BuyerDemandPanel({ compact = false }) {
 
   return (
     <div
-      className="bg-card"
-      style={{
+      className={embedded ? undefined : 'bg-card'}
+      style={embedded ? undefined : {
         border: '1px solid var(--border)',
         borderRadius: '4px',
       }}
     >
+      {!embedded && (
       <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
         <p
           className="font-mono uppercase"
@@ -141,6 +142,7 @@ export default function BuyerDemandPanel({ compact = false }) {
           {syncing ? ' Syncing…' : ''}
         </p>
       </div>
+      )}
 
       <form onSubmit={handleSubmit} className="px-4 py-4 space-y-3">
         <div className={`grid gap-3 ${compact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
@@ -238,7 +240,7 @@ export default function BuyerDemandPanel({ compact = false }) {
           style={{
             fontSize: '10px',
             background: 'var(--accent)',
-            color: '#0D1F0F',
+            color: 'var(--forest)',
             borderRadius: '2px',
             letterSpacing: '0.12em',
           }}

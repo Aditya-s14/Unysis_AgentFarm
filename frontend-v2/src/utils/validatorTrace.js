@@ -111,7 +111,7 @@ export function validatorSummaryColor(details) {
   const errors = details?.errors_count ?? 0;
   const warnings = details?.warnings_count ?? 0;
   if (errors > 0) return 'var(--red-risk)';
-  if (warnings > 0) return '#FF9800';
+  if (warnings > 0) return 'var(--harvest-gold)';
   return 'var(--green-ok)';
 }
 

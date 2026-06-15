@@ -47,7 +47,7 @@ export default function BuyerRoutePriorityBanner({ plan }) {
       style={{
         border: '1px solid var(--accent)',
         borderRadius: '4px',
-        background: 'rgba(245, 166, 35, 0.06)',
+        background: 'var(--orange-selected)',
         fontSize: '11px',
         color: 'var(--text)',
       }}

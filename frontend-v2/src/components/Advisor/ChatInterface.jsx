@@ -130,7 +130,7 @@ export default function ChatInterface() {
           style={{
             color: 'var(--accent)',
             borderBottom: '1px solid var(--border)',
-            background: 'rgba(245,166,35,0.06)',
+            background: 'var(--orange-selected)',
           }}
         >
           {runNotice}
@@ -219,7 +219,7 @@ export default function ChatInterface() {
           className="px-5 py-2 font-mono uppercase tracking-wider-2 transition disabled:opacity-50"
           style={{
             background: 'var(--accent)',
-            color: '#0D1F0F',
+            color: 'var(--forest)',
             fontSize: '11px',
             fontWeight: 600,
             borderRadius: '2px',

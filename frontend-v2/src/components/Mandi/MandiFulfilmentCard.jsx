@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { displayTruckId } from '@/utils/truckDisplay';
 
 const STATUS_SHORT = {
   'CRITICAL SHORTAGE': 'CRITICAL',
@@ -27,14 +27,96 @@ function CoreMetric({ label, value, accent }) {
   );
 }
 
+function IncomingTrucksList({
+  trucks,
+  canLogOutcome,
+  mandiId,
+  isTruckLogged,
+  onConfirmDelivery,
+  row,
+}) {
+  if (!trucks.length) {
+    return (
+      <p className="font-mono text-muted" style={{ fontSize: '11px' }}>
+        No trucks assigned to this mandi in the current plan.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="space-y-2">
+      {trucks.map((t, i) => {
+        const logged = isTruckLogged?.(mandiId, t.truck_id);
+        const canConfirm = canLogOutcome && (t.load_kg ?? 0) > 0 && !logged && onConfirmDelivery;
+
+        return (
+          <li
+            key={`${t.truck_id}-${i}`}
+            className="flex items-center justify-between gap-3 py-2 px-3"
+            style={{
+              border: '1px solid var(--border)',
+              borderRadius: '4px',
+              background: logged ? 'var(--green-muted)' : 'var(--bg-subtle)',
+            }}
+          >
+            <div className="min-w-0">
+              <p className="font-syne font-bold text-[12px]" style={{ color: 'var(--navy)' }}>
+                {displayTruckId(t.truck_id)}
+              </p>
+              <p className="font-mono text-muted mt-0.5" style={{ fontSize: '11px' }}>
+                {t.load_kg.toLocaleString()} kg
+              </p>
+            </div>
+            {logged ? (
+              <span
+                className="font-mono uppercase shrink-0"
+                style={{
+                  fontSize: '9px',
+                  letterSpacing: '0.1em',
+                  color: 'var(--green-ok)',
+                  border: '1px solid var(--green-ok)',
+                  borderRadius: '2px',
+                  padding: '4px 8px',
+                }}
+              >
+                Confirmed
+              </span>
+            ) : canConfirm ? (
+              <button
+                type="button"
+                onClick={() => onConfirmDelivery(row, t)}
+                className="font-mono uppercase tracking-wider shrink-0 py-1.5 px-3"
+                style={{
+                  fontSize: '9px',
+                  letterSpacing: '0.1em',
+                  border: '1px solid var(--accent)',
+                  color: 'var(--accent)',
+                  borderRadius: '2px',
+                  background: 'var(--accent-muted)',
+                }}
+              >
+                Confirm
+              </button>
+            ) : (
+              <span className="font-mono text-muted shrink-0" style={{ fontSize: '10px' }}>
+                {(t.load_kg ?? 0) > 0 ? 'Pending' : 'No load'}
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export default function MandiFulfilmentCard({
   row,
   isFirst,
   canLogOutcome,
   isLogged,
+  isTruckLogged,
   onConfirmDelivery,
 }) {
-  const [open, setOpen] = useState(false);
   const barWidth = Math.min(100, (row.fulfilmentPct / 200) * 100);
   const statusShort = STATUS_SHORT[row.statusLabel] || row.statusLabel;
 
@@ -50,6 +132,8 @@ export default function MandiFulfilmentCard({
       ? 'var(--green-ok)'
       : 'var(--muted)';
 
+  const allTrucksLogged = isLogged?.(row.id, row.incomingTrucks);
+
   return (
     <article
       className="p-5 md:p-6"
@@ -60,7 +144,7 @@ export default function MandiFulfilmentCard({
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderLeftColor = 'var(--accent)';
-        e.currentTarget.style.background = 'rgba(245, 166, 35, 0.03)';
+        e.currentTarget.style.background = 'var(--orange-selected)';
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.borderLeftColor = 'transparent';
@@ -78,7 +162,7 @@ export default function MandiFulfilmentCard({
           </h4>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-          {isLogged && (
+          {allTrucksLogged && (
             <span
               className="font-mono uppercase inline-flex items-center gap-1.5"
               style={{
@@ -88,10 +172,10 @@ export default function MandiFulfilmentCard({
                 borderRadius: '2px',
                 border: '1px solid var(--green-ok)',
                 color: 'var(--green-ok)',
-                background: 'rgba(76, 175, 80, 0.08)',
+                background: 'var(--green-muted)',
               }}
             >
-              LOGGED
+              ALL LOGGED
             </span>
           )}
           <span
@@ -103,7 +187,7 @@ export default function MandiFulfilmentCard({
               borderRadius: '2px',
               border: `1px solid ${row.statusColor}`,
               color: row.statusColor,
-              background: 'rgba(255,255,255,0.03)',
+              background: 'var(--bg-subtle)',
             }}
           >
             <span
@@ -121,7 +205,7 @@ export default function MandiFulfilmentCard({
       </div>
 
       {/* Core numbers */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-5">
         <CoreMetric
           label="Expected demand"
           value={`${row.expectedDemand.toLocaleString()} kg`}
@@ -132,8 +216,12 @@ export default function MandiFulfilmentCard({
           accent={row.incomingSupply > 0 ? 'var(--green-ok)' : undefined}
         />
         <CoreMetric
-          label="Total available"
-          value={`${row.totalAvailable.toLocaleString()} kg`}
+          label="Current stock"
+          value={`${row.currentStock.toLocaleString()} kg`}
+        />
+        <CoreMetric
+          label="Usable stock"
+          value={`${row.usableStock.toLocaleString()} kg`}
         />
         <CoreMetric label="Gap" value={gapLabel} accent={gapColor} />
       </div>
@@ -173,82 +261,22 @@ export default function MandiFulfilmentCard({
         </div>
       </div>
 
-      {canLogOutcome && row.incomingSupply > 0 && !isLogged && onConfirmDelivery && (
-        <button
-          type="button"
-          onClick={() => onConfirmDelivery(row)}
-          className="mb-4 font-mono uppercase tracking-wider w-full py-2"
-          style={{
-            fontSize: '10px',
-            letterSpacing: '0.12em',
-            border: '1px solid var(--accent)',
-            color: 'var(--accent)',
-            borderRadius: '2px',
-            background: 'rgba(245, 166, 35, 0.06)',
-          }}
-        >
-          Confirm delivery
-        </button>
-      )}
-
-      {/* Details expander */}
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="font-mono uppercase tracking-wider"
-        style={{
-          fontSize: '9px',
-          letterSpacing: '0.16em',
-          color: 'var(--accent)',
-          padding: '4px 0',
-        }}
-        aria-expanded={open}
-      >
-        {open ? '▾' : '▸'} Show details
-      </button>
-
-      {open && (
-        <div
-          className="mt-4 pt-4 space-y-4"
-          style={{ borderTop: '1px solid var(--border)' }}
-        >
-          <div className="grid grid-cols-2 gap-4">
-            <CoreMetric
-              label="Current stock"
-              value={`${row.currentStock.toLocaleString()} kg`}
-            />
-            <CoreMetric
-              label="Usable stock"
-              value={`${row.usableStock.toLocaleString()} kg`}
-            />
-          </div>
-
-          {row.incomingTrucks.length > 0 ? (
-            <div>
-              <p
-                className="font-mono text-muted uppercase mb-2"
-                style={{ fontSize: '9px', letterSpacing: '0.14em' }}
-              >
-                Incoming trucks
-              </p>
-              <ul className="space-y-1.5">
-                {row.incomingTrucks.map((t, i) => (
-                  <li
-                    key={`${t.truck_id}-${i}`}
-                    className="font-mono flex justify-between gap-2"
-                    style={{ fontSize: '11px', color: 'var(--text)' }}
-                  >
-                    <span>{t.truck_id}</span>
-                    <span className="text-muted">{t.load_kg.toLocaleString()} kg</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p className="font-mono text-muted" style={{ fontSize: '11px' }}>
-              No trucks assigned to this mandi in the current plan.
-            </p>
-          )}
+      {row.incomingTrucks.length > 0 && (
+        <div className="mb-4">
+          <p
+            className="font-mono text-muted uppercase mb-2"
+            style={{ fontSize: '9px', letterSpacing: '0.14em' }}
+          >
+            Incoming trucks
+          </p>
+          <IncomingTrucksList
+            trucks={row.incomingTrucks}
+            canLogOutcome={canLogOutcome}
+            mandiId={row.id}
+            isTruckLogged={isTruckLogged}
+            onConfirmDelivery={onConfirmDelivery}
+            row={row}
+          />
         </div>
       )}
     </article>

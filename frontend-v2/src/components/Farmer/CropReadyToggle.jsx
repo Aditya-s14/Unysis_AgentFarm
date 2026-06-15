@@ -65,7 +65,7 @@ export default function CropReadyToggle({ farmId }) {
               fontSize: '11px',
               border: '1px solid var(--accent)',
               borderRadius: '2px',
-              background: ready ? 'rgba(245,166,35,0.08)' : 'transparent',
+              background: ready ? 'var(--orange-selected)' : 'transparent',
               color: 'var(--accent)',
               cursor: saving ? 'not-allowed' : 'pointer',
               opacity: saving ? 0.6 : 1,

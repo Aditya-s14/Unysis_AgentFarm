@@ -1,6 +1,6 @@
 import { DEMO_FARMS } from '@/utils/demoFixtures';
 
-const RISK_COLORS = { severe: '#FF4444', warning: '#FF9800' };
+const RISK_COLORS = { severe: '#E74C3C', warning: 'var(--harvest-gold)' };
 
 /**
  * AlternateStopsPanel — shows at-risk farms not currently on this truck's route
@@ -29,35 +29,35 @@ export default function AlternateStopsPanel({ planData, currentStops = [] }) {
     });
 
   return (
-    <div className="mb-4">
-      <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: 'var(--muted)' }}>
-        Alternate Stop Suggestions ({suggestions.length})
+    <div
+      style={{
+        border: '1px solid var(--border)',
+        borderRadius: '4px',
+        background: 'var(--bg-card)',
+        overflow: 'hidden',
+      }}
+    >
+      <p className="font-mono uppercase text-[10px] tracking-widest px-5 pt-5 pb-3" style={{ color: 'var(--muted)' }}>
+        Alternate stop suggestions ({suggestions.length})
       </p>
-      <div
-        className="p-3"
-        style={{
-          border: '1px solid var(--border)',
-          borderRadius: '4px',
-          background: 'rgba(255,152,0,0.04)',
-        }}
-      >
-        <p className="text-[11px] mb-3" style={{ color: 'var(--muted)' }}>
+      <div className="px-5 pb-5">
+        <p className="font-mono text-[11px] mb-3" style={{ color: 'var(--text-secondary)' }}>
           High-risk farms not on your current route. Contact FPO to reroute.
         </p>
         <div className="space-y-2">
           {suggestions.map((s) => (
             <div
               key={s.farm_id}
-              className="flex items-start gap-3 p-2"
+              className="flex items-start gap-3 p-3"
               style={{
-                border: `1px solid ${RISK_COLORS[s.risk]}30`,
-                borderRadius: '3px',
-                background: `rgba(${s.risk === 'severe' ? '220,50,50' : '255,152,0'},0.06)`,
+                border: `1px solid ${RISK_COLORS[s.risk]}40`,
+                borderRadius: '4px',
+                background: s.risk === 'severe' ? 'rgba(231, 76, 60, 0.06)' : 'rgba(244, 182, 62, 0.08)',
               }}
             >
               <span style={{ color: RISK_COLORS[s.risk], fontSize: 14, flexShrink: 0, marginTop: 1 }}>⚠</span>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-bold" style={{ color: 'var(--text)' }}>
+                <p className="font-syne text-[12px] font-bold" style={{ color: 'var(--navy)' }}>
                   {s.farm?.name || s.farm_id}
                 </p>
                 <p className="text-[10px] mt-0.5" style={{ color: RISK_COLORS[s.risk] }}>

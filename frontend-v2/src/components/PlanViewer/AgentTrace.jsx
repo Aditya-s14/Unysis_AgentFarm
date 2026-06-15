@@ -29,9 +29,9 @@ import {
 const AGENT_COLOR = {
   orchestrator: 'var(--accent)',
   weather: '#2196F3',
-  demand: '#FF9800',
+  demand: 'var(--harvest-gold)',
   inventory: 'var(--green-ok)',
-  logistics: '#9C27B0',
+  logistics: '#0F5B45',
   validator: 'var(--muted)',
 };
 
@@ -40,7 +40,7 @@ const DETERMINISTIC_AGENTS = new Set(['logistics', 'logistics_agent', 'validator
 const CHECK_STATUS_STYLE = {
   pass: { color: 'var(--green-ok)', icon: '✓' },
   fail: { color: 'var(--red-risk)', icon: '✗' },
-  warn: { color: '#FF9800', icon: WARN },
+  warn: { color: 'var(--harvest-gold)', icon: WARN },
 };
 
 function colorForAgent(name) {
@@ -171,8 +171,8 @@ function ToolChips({ toolCalls }) {
               fontSize: '9px',
               letterSpacing: '0.08em',
               color: 'var(--accent)',
-              border: '1px solid rgba(245, 166, 35, 0.35)',
-              background: 'rgba(245, 166, 35, 0.08)',
+              border: '1px solid var(--harvest-gold)',
+              background: 'var(--orange-selected)',
               borderRadius: '2px',
               padding: '2px 6px',
             }}

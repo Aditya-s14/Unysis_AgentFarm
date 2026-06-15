@@ -1,4 +1,4 @@
-﻿import Head from 'next/head';
+import Head from 'next/head';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -120,20 +120,20 @@ function weatherRiskBadgeStyle(level) {
     return {
       color: 'var(--red-risk)',
       border: '1px solid var(--red-risk)',
-      background: 'rgba(220,50,50,0.08)',
+      background: 'var(--red-muted)',
     };
   }
   if (key === 'warning') {
     return {
-      color: '#FF9800',
-      border: '1px solid #FF9800',
-      background: 'rgba(255,152,0,0.08)',
+      color: 'var(--harvest-gold)',
+      border: '1px solid var(--harvest-gold)',
+      background: 'var(--orange-muted)',
     };
   }
   return {
     color: 'var(--green-ok)',
     border: '1px solid var(--green-ok)',
-    background: 'rgba(76, 175, 80, 0.08)',
+    background: 'var(--green-muted)',
   };
 }
 
@@ -194,7 +194,7 @@ function DashboardPage() {
   const [selectedTruckId, setSelectedTruckId] = useState(null);
   const [breakdownIncidents, setBreakdownIncidents] = useState([]);
   const [breakdownModal, setBreakdownModal] = useState(null);
-  const [outcomeModalMandi, setOutcomeModalMandi] = useState(null);
+  const [outcomeModal, setOutcomeModal] = useState(null);
   const [farmerFilters, setFarmerFilters] = useState({
     risk: 'all', crop: 'all', truck: 'all', spoilage: 'all',
   });
@@ -227,6 +227,7 @@ function DashboardPage() {
     logMandiOutcome,
     logging: outcomeLogging,
     isLogged: isMandiOutcomeLogged,
+    isTruckLogged: isMandiTruckLogged,
   } = useOutcomeLog(runId);
 
   const guaranteedFarmIds = useMemo(() => {
@@ -320,7 +321,7 @@ function DashboardPage() {
 
   const rawRoutes = useMemo(() => cached?.plan?.route_plan?.routes || [], [cached]);
 
-  // farm_id → truck_id from route stops
+  // farm_id ? truck_id from route stops
   const farmTruckMap = useMemo(() => {
     const m = {};
     rawRoutes.forEach((r) => {
@@ -331,7 +332,7 @@ function DashboardPage() {
     return m;
   }, [rawRoutes]);
 
-  // demand_point_id → { truck_id, stopIdx }
+  // demand_point_id ? { truck_id, stopIdx }
   const mandiRouteMap = useMemo(() => {
     const m = {};
     rawRoutes.forEach((r) => {
@@ -344,7 +345,7 @@ function DashboardPage() {
     return m;
   }, [rawRoutes]);
 
-  // at_risk_stock lookup: farm_id → { hours_until_spoilage, kg_at_risk }
+  // at_risk_stock lookup: farm_id ? { hours_until_spoilage, kg_at_risk }
   const atRiskMap = useMemo(() => {
     const m = {};
     (cached?.at_risk_stock || []).forEach((s) => { m[s.farm_id] = s; });
@@ -565,6 +566,15 @@ function DashboardPage() {
             runId={runId}
             incidents={breakdownIncidents}
             onApproved={handleBreakdownReported}
+            onReplanRequest={(inc) => {
+              const route = rawRoutes.find((r) => r.truck_id === inc.truck_id);
+              const stops = (route?.stops || []).filter((s) => !s.demand_point_id);
+              setBreakdownModal({
+                truckId: inc.truck_id,
+                farmStops: stops,
+                replanIncidentId: inc.incident_id,
+              });
+            }}
           />
         )}
 
@@ -574,21 +584,24 @@ function DashboardPage() {
             truckId={breakdownModal.truckId}
             farmStops={breakdownModal.farmStops}
             farmsById={farmsById}
+            replanIncidentId={breakdownModal.replanIncidentId || null}
             onClose={() => setBreakdownModal(null)}
             onReported={handleBreakdownReported}
           />
         )}
 
-        {outcomeModalMandi && (
+        {outcomeModal && (
           <DeliveryOutcomeModal
-            mandiRow={outcomeModalMandi}
+            mandiRow={outcomeModal.mandiRow}
+            truck={outcomeModal.truck}
             cached={cached}
             rawRoutes={rawRoutes}
             farms={Array.isArray(cached?.farms) && cached.farms.length ? cached.farms : DEMO_FARMS}
             loading={outcomeLogging}
-            onClose={() => setOutcomeModalMandi(null)}
+            onClose={() => setOutcomeModal(null)}
             onSubmit={(actualOverrides) => logMandiOutcome({
-              mandiRow: outcomeModalMandi,
+              mandiRow: outcomeModal.mandiRow,
+              truck: outcomeModal.truck,
               cached,
               rawRoutes,
               farms: Array.isArray(cached?.farms) && cached.farms.length ? cached.farms : DEMO_FARMS,
@@ -620,7 +633,7 @@ function DashboardPage() {
                     letterSpacing: '0.15em',
                     borderRadius: '2px',
                     border: activeTab === tab.id ? '1px solid var(--accent)' : '1px solid var(--border)',
-                    background: activeTab === tab.id ? 'rgba(245,166,35,0.1)' : 'transparent',
+                    background: activeTab === tab.id ? 'var(--orange-muted)' : 'transparent',
                     color: activeTab === tab.id ? 'var(--accent)' : 'var(--muted)',
                     cursor: 'pointer',
                   }}
@@ -650,11 +663,11 @@ function DashboardPage() {
 
                 <section className="mt-6">
                   <SectionCard
-                    title="▸ Optimised Routes"
+                    title="? Optimised Routes"
                     badge={
                       selectedTruckId
                         ? `SHOWING: ${displayTruckId(selectedTruckId)}`
-                        : `${routesForMap.length} ROUTES · ${DEMO_MAP_FARMS.length} FARMS · ${DEMO_MAP_MANDIS.length} MANDIS`
+                        : `${routesForMap.length} ROUTES ? ${DEMO_MAP_FARMS.length} FARMS ? ${DEMO_MAP_MANDIS.length} MANDIS`
                     }
                   >
                     <div className="px-4 pt-4">
@@ -744,7 +757,7 @@ function DashboardPage() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <SectionCard
-                  title="▸ Your Farms at Risk Today"
+                  title="? Your Farms at Risk Today"
                   badge={`${filteredFarmerFarms.length} / ${DEMO_FARMS.length} FARMS`}
                 >
                   <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
@@ -777,7 +790,7 @@ function DashboardPage() {
                                     aria-hidden
                                     style={{ color: 'var(--green-ok)', fontSize: '10px', lineHeight: 1 }}
                                   >
-                                    ●
+                                    ?
                                   </span>
                                   {farm.name}
                                   {guaranteed && (
@@ -796,51 +809,42 @@ function DashboardPage() {
                                     </span>
                                   )}
                                 </p>
-                                <div className="shrink-0 text-right max-w-[140px]">
+                                <div className="shrink-0 flex items-center gap-2">
                                   {farmerWeatherContext.hasRun ? (
-                                    <>
-                                      <span
-                                        className="font-mono uppercase tracking-wider inline-block px-2 py-0.5"
-                                        style={{
-                                          fontSize: '9px',
-                                          letterSpacing: '0.12em',
-                                          borderRadius: '2px',
-                                          ...weatherRiskBadgeStyle(weatherRisk),
-                                        }}
-                                      >
-                                        {String(weatherRisk).toUpperCase()}
-                                      </span>
-                                      {(rainMm != null || tempC != null) && (
-                                        <p className="font-mono text-muted mt-1" style={{ fontSize: '10px', lineHeight: 1.4 }}>
-                                          {rainMm != null ? `${rainMm}mm rain` : ''}
-                                          {rainMm != null && tempC != null ? ` ${MIDDOT} ` : ''}
-                                          {tempC != null ? `${Math.round(tempC)}°C` : ''}
-                                        </p>
-                                      )}
-                                    </>
+                                    <span
+                                      className="font-mono uppercase tracking-wider inline-block px-2 py-0.5"
+                                      style={{
+                                        fontSize: '9px',
+                                        letterSpacing: '0.12em',
+                                        borderRadius: '2px',
+                                        ...weatherRiskBadgeStyle(weatherRisk),
+                                      }}
+                                    >
+                                      {String(weatherRisk).toUpperCase()}
+                                    </span>
                                   ) : (
-                                    <p className="font-mono text-muted" style={{ fontSize: '10px', lineHeight: 1.4 }}>
-                                      No weather data — run a scenario first
+                                    <p className="font-mono text-muted text-right" style={{ fontSize: '10px', lineHeight: 1.4, maxWidth: 140 }}>
+                                      No weather data
                                     </p>
                                   )}
                                 </div>
                               </div>
-                              <p className="font-mono text-muted mt-1" style={{ fontSize: '11px' }}>
+                              {farmerWeatherContext.hasRun ? (
+                                <FarmWeatherChips rainMm={rainMm} tempC={tempC} />
+                              ) : (
+                                <p className="font-mono text-muted mt-2" style={{ fontSize: '10px', lineHeight: 1.4 }}>
+                                  Run a scenario to load weather forecasts
+                                </p>
+                              )}
+                              <p className="font-mono text-muted mt-2" style={{ fontSize: '11px' }}>
                                 {kg.toLocaleString()} kg at risk
                                 {hours != null ? ` ${MIDDOT} ${Math.round(hours)}h until spoilage` : ''}
                               </p>
-                              {truckId && (
-                                <p className="font-mono mt-1" style={{ fontSize: '11px', color: 'var(--accent)' }}>
-                                  Truck assigned: {displayTruckId(truckId)} {MIDDOT} pickup {pickupTime}
-                                </p>
-                              )}
-                              {!truckId && (
-                                <p className="font-mono mt-1" style={{ fontSize: '11px', color: 'var(--red-risk)' }}>
-                                  <span aria-hidden>{WARN}</span>
-                                  {' '}
-                                  No truck assigned yet
-                                </p>
-                              )}
+                              <FarmTruckChips
+                                truckId={truckId}
+                                pickupTime={pickupTime}
+                                displayTruckId={displayTruckId}
+                              />
                             </div>
                             <UrgencyBadge hours={hours} />
                           </div>
@@ -851,7 +855,7 @@ function DashboardPage() {
                 </SectionCard>
 
                 <SectionCard
-                  title="▸ What To Do Today"
+                  title="? What To Do Today"
                   badge={`${filteredFarmerFarms.length} ACTIONS`}
                 >
                   <div className="px-5 py-4 space-y-4">
@@ -869,7 +873,7 @@ function DashboardPage() {
                           className="p-3"
                           style={{
                             borderLeft: '3px solid var(--accent)',
-                            background: 'rgba(245,166,35,0.03)',
+                            background: 'var(--orange-selected)',
                             borderRadius: '0 2px 2px 0',
                           }}
                         >
@@ -889,7 +893,7 @@ function DashboardPage() {
               </section>
             )}
 
-            {/* MANDI tab — supply fulfilment dashboard */}
+            {/* MANDI tab ? supply fulfilment dashboard */}
             {/* ---- BUYER tab ------------------------------------------------------------------------------------------- */}
             {activeTab === 'buyer' && (
               <section className="mt-6 space-y-4">
@@ -941,12 +945,12 @@ function DashboardPage() {
                     label="Mandi name"
                     value={mandiFilters.search}
                     onChange={(search) => setMandiFilters((f) => ({ ...f, search }))}
-                    placeholder="Search mandis…"
+                    placeholder="Search mandis?"
                   />
                 </TabFilterBar>
 
                 <SectionCard
-                  title="▸ Mandi Fulfilment"
+                  title="? Mandi Fulfilment"
                   badge={`${filteredMandiFulfilment.length} / ${mandiFulfilment.length} MANDIS`}
                 >
                   {mandiFulfilment.length === 0 ? (
@@ -965,8 +969,9 @@ function DashboardPage() {
                           row={row}
                           isFirst={idx === 0}
                           canLogOutcome={notificationsDispatched}
-                          isLogged={isMandiOutcomeLogged(row.id)}
-                          onConfirmDelivery={setOutcomeModalMandi}
+                          isLogged={isMandiOutcomeLogged}
+                          isTruckLogged={isMandiTruckLogged}
+                          onConfirmDelivery={(mandiRow, truck) => setOutcomeModal({ mandiRow, truck })}
                         />
                       ))}
                     </div>
@@ -974,7 +979,7 @@ function DashboardPage() {
                 </SectionCard>
 
                 {mandiFulfilment.length > 0 && supplySuggestions.length > 0 && (
-                  <SectionCard title="▸ Supply Balancing Suggestions">
+                  <SectionCard title="? Supply Balancing Suggestions">
                     <ul className="px-5 py-4 space-y-3">
                       {supplySuggestions.map((text, i) => (
                         <li
@@ -1090,7 +1095,6 @@ function DashboardPage() {
                         atRiskMap={atRiskMap}
                         mandiById={mandiById}
                         farmsById={farmsById}
-                        computeETA={computeETA}
                         canReportBreakdown={
                           notificationsDispatched
                           && Boolean(route)
@@ -1110,7 +1114,7 @@ function DashboardPage() {
                 {/* Click-to-highlight hint */}
                 <p className="font-mono text-muted text-center" style={{ fontSize: '10px', letterSpacing: '0.12em' }}>
                   {selectedTruckId
-                    ? `Showing route for ${displayTruckId(selectedTruckId)} — click card again to deselect`
+                    ? `Showing route for ${displayTruckId(selectedTruckId)} ? click card again to deselect`
                     : 'Click a truck card to highlight its route on the map'}
                 </p>
 
@@ -1123,7 +1127,7 @@ function DashboardPage() {
                 )}
 
                 <SectionCard
-                  title="▸ Route Map"
+                  title="? Route Map"
                   badge={selectedTruckId ? `SHOWING: ${displayTruckId(selectedTruckId)}` : `${routesForMap.length} ACTIVE ROUTES`}
                 >
                   <div ref={mapPanelRef}>
@@ -1152,14 +1156,14 @@ function DashboardPage() {
             style={{ borderBottom: '1px solid var(--border)' }}
           >
             <h2 className="font-syne font-bold uppercase text-paper tracking-wider-2" style={{ fontSize: '14px' }}>
-              ▸ Recent Runs
+              ? Recent Runs
             </h2>
             <Link href="/runs" className="font-mono text-accent text-[11px] tracking-wider uppercase hover:underline">
-              View all →
+              View all ?
             </Link>
           </div>
           {runsLoading ? (
-            <p className="px-5 py-4 font-mono text-muted text-[12px]">Loading…</p>
+            <p className="px-5 py-4 font-mono text-muted text-[12px]">Loading?</p>
           ) : runs.length === 0 ? (
             <p className="px-5 py-4 font-mono text-muted text-[12px] italic">
               No runs yet.{' '}
@@ -1175,7 +1179,7 @@ function DashboardPage() {
                 >
                   <div>
                     <p className="font-syne font-bold text-paper" style={{ fontSize: '13px', letterSpacing: '0.05em' }}>
-                      {r.runId?.slice(0, 16)}…
+                      {r.runId?.slice(0, 16)}?
                     </p>
                     <p className="font-mono text-muted text-[11px] mt-1 uppercase tracking-wider">
                       {r.scenarioType}
@@ -1184,7 +1188,7 @@ function DashboardPage() {
                   <div className="text-right">
                     <p className="font-mono text-muted text-[11px]">{r.createdAt}</p>
                     <p className="font-syne font-bold mt-1" style={{ color: 'var(--green-ok)', fontSize: '12px' }}>
-                      ↑ {(r.wasteReductionPct * 100).toFixed(1)}% waste reduction
+                      ? {(r.wasteReductionPct * 100).toFixed(1)}% waste reduction
                     </p>
                   </div>
                 </li>
@@ -1236,9 +1240,152 @@ function SectionCard({ title, badge, children }) {
   );
 }
 
+function FarmDetailChip({ icon, label, detail, background, color, border, iconBackground }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '5px 10px',
+        borderRadius: 8,
+        fontSize: '11px',
+        fontWeight: 500,
+        lineHeight: 1.2,
+        background,
+        color,
+        border,
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 6,
+          flexShrink: 0,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: iconBackground,
+          fontSize: 12,
+        }}
+      >
+        {icon}
+      </span>
+      <span>
+        <span
+          style={{
+            display: 'block',
+            fontSize: '9px',
+            fontWeight: 600,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            opacity: 0.85,
+          }}
+        >
+          {label}
+        </span>
+        <span style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: '11px' }}>{detail}</span>
+      </span>
+    </span>
+  );
+}
+
+function formatRainDisplay(rainMm) {
+  if (rainMm == null) return null;
+  const v = Number(rainMm);
+  if (!Number.isFinite(v)) return null;
+  if (v === 0) return { label: 'Dry', detail: '0 mm expected' };
+  const mm = v % 1 === 0 ? String(v) : v.toFixed(1);
+  if (v < 2.5) return { label: 'Light rain', detail: `${mm} mm` };
+  if (v < 10) return { label: 'Rain', detail: `${mm} mm` };
+  return { label: 'Heavy rain', detail: `${mm} mm` };
+}
+
+function FarmWeatherChips({ rainMm, tempC }) {
+  const rain = formatRainDisplay(rainMm);
+  if (!rain && tempC == null) return null;
+
+  const temp = tempC != null ? Math.round(Number(tempC)) : null;
+  const isHot = temp != null && temp >= 34;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 mt-2">
+      {rain && (
+        <FarmDetailChip
+          icon={rain.label === 'Dry' ? '?' : '??'}
+          label={rain.label}
+          detail={rain.detail}
+          background={rain.label === 'Dry' ? 'var(--green-muted)' : 'var(--blue-muted)'}
+          color={rain.label === 'Dry' ? 'var(--forest)' : 'var(--water-blue)'}
+          border={rain.label === 'Dry'
+            ? '1px solid rgba(34, 160, 107, 0.22)'
+            : '1px solid rgba(33, 150, 243, 0.22)'}
+          iconBackground={rain.label === 'Dry' ? 'rgba(34,160,107,0.15)' : 'rgba(33,150,243,0.15)'}
+        />
+      )}
+      {temp != null && (
+        <FarmDetailChip
+          icon={isHot ? '??' : '??'}
+          label={isHot ? 'Hot' : 'Temp'}
+          detail={`${temp}?C`}
+          background={isHot ? 'var(--orange-muted)' : 'var(--cyan-muted)'}
+          color={isHot ? 'var(--amber-warn)' : 'var(--sky-blue)'}
+          border={isHot
+            ? '1px solid rgba(244, 182, 62, 0.35)'
+            : '1px solid rgba(74, 144, 226, 0.25)'}
+          iconBackground={isHot ? 'rgba(255,193,7,0.18)' : 'rgba(74,144,226,0.15)'}
+        />
+      )}
+    </div>
+  );
+}
+
+function FarmTruckChips({ truckId, pickupTime, displayTruckId }) {
+  if (!truckId) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 mt-2">
+        <FarmDetailChip
+          icon={WARN}
+          label="Unassigned"
+          detail="No truck yet"
+          background="var(--red-muted)"
+          color="var(--red-risk)"
+          border="1px solid rgba(231, 76, 60, 0.28)"
+          iconBackground="rgba(231, 76, 60, 0.12)"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 mt-2">
+      <FarmDetailChip
+        icon="??"
+        label="Truck"
+        detail={displayTruckId(truckId)}
+        background="var(--green-muted)"
+        color="var(--forest)"
+        border="1px solid rgba(34, 160, 107, 0.22)"
+        iconBackground="rgba(34, 160, 107, 0.15)"
+      />
+      <FarmDetailChip
+        icon="??"
+        label="Pickup"
+        detail={pickupTime}
+        background="var(--orange-muted)"
+        color="var(--amber-warn)"
+        border="1px solid rgba(244, 182, 62, 0.35)"
+        iconBackground="rgba(255, 193, 7, 0.18)"
+      />
+    </div>
+  );
+}
+
 function UrgencyBadge({ hours }) {
   if (hours == null) return null;
-  const color = hours <= 0 ? 'var(--red-risk)' : hours <= 12 ? '#FF9800' : 'var(--green-ok)';
+  const color = hours <= 0 ? 'var(--red-risk)' : hours <= 12 ? 'var(--harvest-gold)' : 'var(--green-ok)';
   const label = hours <= 0 ? 'OVERDUE' : hours <= 12 ? 'URGENT' : 'OK';
   return (
     <span
@@ -1296,8 +1443,8 @@ function WasteBarChart({ kpis }) {
   const wastePct    = Number(kpis?.waste_reduction_pct ?? 0);
 
   const data = [
-    { label: 'Naive',     kg: naiveKg,     fill: '#FF4444' },
-    { label: 'Optimised', kg: optimizedKg, fill: '#4CAF50' },
+    { label: 'Naive',     kg: naiveKg,     fill: 'var(--red-risk)' },
+    { label: 'Optimised', kg: optimizedKg, fill: 'var(--green-ok)' },
   ];
 
   const CustomTooltip = ({ active, payload }) => {
@@ -1343,18 +1490,18 @@ function WasteBarChart({ kpis }) {
           <BarChart data={data} barCategoryGap="40%" margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
             <XAxis
               dataKey="label"
-              tick={{ fill: 'var(--muted)', fontFamily: 'DM Mono', fontSize: 11 }}
+              tick={{ fill: 'var(--muted)', fontFamily: 'IBM Plex Sans', fontSize: 11 }}
               axisLine={{ stroke: 'var(--border)' }}
               tickLine={false}
             />
             <YAxis
-              tick={{ fill: 'var(--muted)', fontFamily: 'DM Mono', fontSize: 10 }}
+              tick={{ fill: 'var(--muted)', fontFamily: 'IBM Plex Sans', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => `${v} kg`}
               width={60}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--bg-subtle)' }} />
             <Bar dataKey="kg" radius={[2, 2, 0, 0]}>
               {data.map((entry) => (
                 <Cell key={entry.label} fill={entry.fill} />
@@ -1364,14 +1511,14 @@ function WasteBarChart({ kpis }) {
         </ResponsiveContainer>
       </div>
       <div className="px-5 pb-4 flex gap-6">
-        <LegendDot color="#FF4444" label={`Naive baseline: ${naiveKg.toLocaleString()} kg`} />
-        <LegendDot color="#4CAF50" label={`After VRP: ${optimizedKg.toLocaleString()} kg`} />
+        <LegendDot color="var(--red-risk)" label={`Naive baseline: ${naiveKg.toLocaleString()} kg`} />
+        <LegendDot color="var(--green-ok)" label={`After VRP: ${optimizedKg.toLocaleString()} kg`} />
       </div>
     </div>
   );
 }
 
-/* ── Tab filter UI ──────────────────────────────────────────────────────── */
+/* -- Tab filter UI -------------------------------------------------------- */
 
 function TabFilterBar({ children }) {
   return (
@@ -1445,7 +1592,7 @@ function FilterSearch({ label, value, onChange, placeholder }) {
   );
 }
 
-/* ── Route filter & summary ─────────────────────────────────────────────── */
+/* -- Route filter & summary ----------------------------------------------- */
 
 function RouteFilterBar({ truckIds, selectedTruckId, onSelect }) {
   if (!truckIds?.length) return null;
@@ -1479,7 +1626,7 @@ function RouteFilterButton({ label, active, onClick }) {
         letterSpacing: '0.12em',
         borderRadius: '2px',
         border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
-        background: active ? 'rgba(245,166,35,0.12)' : 'transparent',
+        background: active ? 'var(--orange-selected)' : 'transparent',
         color: active ? 'var(--accent)' : 'var(--muted)',
         cursor: 'pointer',
       }}
@@ -1521,16 +1668,16 @@ function RouteSummaryPanel({ truckId, rawRoutes, atRiskMap }) {
       style={{
         border: '1px solid var(--accent)',
         borderRadius: '4px',
-        background: 'rgba(245,166,35,0.05)',
+        background: 'var(--orange-selected)',
       }}
     >
       <p className="font-syne font-bold uppercase text-paper tracking-wider" style={{ fontSize: '13px' }}>
-        Route summary — {displayTruckId(truckId)}
+        Route summary ? {displayTruckId(truckId)}
       </p>
       <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <SummaryStat label="Capacity" value={capacityKg != null ? `${capacityKg.toLocaleString()} kg` : '—'} />
+        <SummaryStat label="Capacity" value={capacityKg != null ? `${capacityKg.toLocaleString()} kg` : '?'} />
         <SummaryStat label="Load" value={`${Math.round(totalLoad).toLocaleString()} kg`} />
-        <SummaryStat label="Distance" value={distanceKm > 0 ? `~${distanceKm.toFixed(0)} km` : '—'} />
+        <SummaryStat label="Distance" value={distanceKm > 0 ? `~${distanceKm.toFixed(0)} km` : '?'} />
         <SummaryStat label="ETA" value={etaTime} />
       </div>
       <p className="font-mono text-muted mt-3 mb-1" style={{ fontSize: '10px', letterSpacing: '0.1em' }}>

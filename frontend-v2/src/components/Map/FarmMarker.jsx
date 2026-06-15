@@ -8,12 +8,12 @@ import { CircleMarker, Popup } from 'react-leaflet';
 function colorForRisk(risk) {
   switch ((risk || '').toLowerCase()) {
     case 'severe':
-    case 'high':   return { stroke: '#FF4444', fill: '#FF4444' };
+    case 'high':   return { stroke: '#E74C3C', fill: '#E74C3C' };
     case 'warning':
-    case 'medium': return { stroke: '#FF9800', fill: '#FF9800' };
+    case 'medium': return { stroke: 'var(--harvest-gold)', fill: 'var(--harvest-gold)' };
     case 'normal':
-    case 'low':    return { stroke: '#4CAF50', fill: '#4CAF50' };
-    default:       return { stroke: '#4CAF50', fill: '#4CAF50' };
+    case 'low':    return { stroke: '#22A06B', fill: '#22A06B' };
+    default:       return { stroke: '#22A06B', fill: '#22A06B' };
   }
 }
 
@@ -33,8 +33,8 @@ export default function FarmMarker({ farm }) {
       }}
     >
       <Popup>
-        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12 }}>
-          <p style={{ margin: 0, color: 'var(--accent)', fontFamily: 'Syne, sans-serif', fontWeight: 700 }}>
+        <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12 }}>
+          <p style={{ margin: 0, color: 'var(--accent)', fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 700 }}>
             {farm.name || `Farm ${farm.id}`}
           </p>
           <p style={{ margin: '4px 0 0', color: 'var(--muted)' }}>ID: {farm.id}</p>

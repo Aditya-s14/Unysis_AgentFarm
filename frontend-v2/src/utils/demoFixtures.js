@@ -69,23 +69,23 @@ export const DEMO_FARMS = _RAW_FARMS.map(withFarmContacts);
 // ── 10 Demand Points ──────────────────────────────────────────────────────
 export const DEMO_DEMAND_POINTS = [
   // APMC Yards
-  { id: 'dp-apmc-01', name: 'Yeshwanthpur APMC Yard',        lat: 13.0280, lng: 77.5366, point_type: 'apmc',    base_demand_per_day: 2000 },
-  { id: 'dp-apmc-02', name: 'Kolar Regional APMC',           lat: 13.1362, lng: 78.1295, point_type: 'apmc',    base_demand_per_day: 1400 },
-  { id: 'dp-apmc-03', name: 'Hubli APMC Main Gate',          lat: 15.3647, lng: 75.1239, point_type: 'apmc',    base_demand_per_day: 1800 },
-  { id: 'dp-apmc-04', name: 'Nashik Wholesale APMC',         lat: 19.9975, lng: 73.7898, point_type: 'apmc',    base_demand_per_day: 1900 },
-  { id: 'dp-apmc-05', name: 'Solapur Tomato Auction APMC',   lat: 17.6599, lng: 75.9064, point_type: 'apmc',    base_demand_per_day: 1500 },
-  { id: 'dp-apmc-06', name: 'Sangli Turmeric & Veg APMC',   lat: 16.8524, lng: 74.5815, point_type: 'apmc',    base_demand_per_day: 1300 },
+  { id: 'dp-apmc-01', name: 'Yeshwanthpur APMC Yard',        lat: 13.0280, lng: 77.5366, point_type: 'apmc',    base_demand_per_day: 2000, current_stock_kg: 320 },
+  { id: 'dp-apmc-02', name: 'Kolar Regional APMC',           lat: 13.1362, lng: 78.1295, point_type: 'apmc',    base_demand_per_day: 1400, current_stock_kg: 0 },
+  { id: 'dp-apmc-03', name: 'Hubli APMC Main Gate',          lat: 15.3647, lng: 75.1239, point_type: 'apmc',    base_demand_per_day: 1800, current_stock_kg: 450 },
+  { id: 'dp-apmc-04', name: 'Nashik Wholesale APMC',         lat: 19.9975, lng: 73.7898, point_type: 'apmc',    base_demand_per_day: 1900, current_stock_kg: 890 },
+  { id: 'dp-apmc-05', name: 'Solapur Tomato Auction APMC',   lat: 17.6599, lng: 75.9064, point_type: 'apmc',    base_demand_per_day: 1500, current_stock_kg: 120 },
+  { id: 'dp-apmc-06', name: 'Sangli Turmeric & Veg APMC',   lat: 16.8524, lng: 74.5815, point_type: 'apmc',    base_demand_per_day: 1300, current_stock_kg: 680 },
   // Cover north-east Karnataka (Raichur/Bellary) and the Malnad belt
   // (Chikmagalur/Shivamogga) — without these, four demo farms sit >150 km
   // from every mandi and can never be routed (APMC radius constraint).
-  { id: 'dp-apmc-07', name: 'Raichur APMC Yard',             lat: 16.2120, lng: 77.3439, point_type: 'apmc',    base_demand_per_day: 1200 },
-  { id: 'dp-apmc-08', name: 'Davanagere APMC Market',        lat: 14.4644, lng: 75.9218, point_type: 'apmc',    base_demand_per_day: 1500 },
+  { id: 'dp-apmc-07', name: 'Raichur APMC Yard',             lat: 16.2120, lng: 77.3439, point_type: 'apmc',    base_demand_per_day: 1200, current_stock_kg: 200 },
+  { id: 'dp-apmc-08', name: 'Davanagere APMC Market',        lat: 14.4644, lng: 75.9218, point_type: 'apmc',    base_demand_per_day: 1500, current_stock_kg: 0 },
   // Private Distribution Centres
-  { id: 'dp-priv-01', name: 'Reliance Fresh DC Pune',        lat: 18.5018, lng: 73.8745, point_type: 'private', base_demand_per_day: 1200 },
-  { id: 'dp-priv-02', name: 'Metro Cash Nashik Ring Road',   lat: 19.9403, lng: 73.8341, point_type: 'private', base_demand_per_day: 1000 },
-  { id: 'dp-priv-03', name: 'Star Bazaar Hubli Bypass',      lat: 15.4021, lng: 75.0777, point_type: 'private', base_demand_per_day:  800 },
+  { id: 'dp-priv-01', name: 'Reliance Fresh DC Pune',        lat: 18.5018, lng: 73.8745, point_type: 'private', base_demand_per_day: 1200, current_stock_kg: 1100 },
+  { id: 'dp-priv-02', name: 'Metro Cash Nashik Ring Road',   lat: 19.9403, lng: 73.8341, point_type: 'private', base_demand_per_day: 1000, current_stock_kg: 750 },
+  { id: 'dp-priv-03', name: 'Star Bazaar Hubli Bypass',      lat: 15.4021, lng: 75.0777, point_type: 'private', base_demand_per_day:  800, current_stock_kg: 920 },
   // Retail
-  { id: 'dp-ret-01',  name: 'Mantri Square Retail Cluster',  lat: 12.9915, lng: 77.5696, point_type: 'retail',  base_demand_per_day:  500 },
+  { id: 'dp-ret-01',  name: 'Mantri Square Retail Cluster',  lat: 12.9915, lng: 77.5696, point_type: 'retail',  base_demand_per_day:  500, current_stock_kg: 180 },
 ];
 
 // ── 10 Trucks (1-ton × 3, 3-ton × 4, 5-ton × 3) ─────────────────────────

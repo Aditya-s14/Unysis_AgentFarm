@@ -64,7 +64,7 @@ function EconomicsRow({ row, compact }) {
           style={{
             border: '1px solid var(--accent)',
             borderRadius: '4px',
-            background: 'rgba(245, 166, 35, 0.06)',
+            background: 'var(--orange-selected)',
           }}
         >
           <p className="font-mono uppercase" style={{ fontSize: '9px', letterSpacing: '0.14em', color: 'var(--accent)' }}>

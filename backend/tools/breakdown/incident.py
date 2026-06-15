@@ -42,9 +42,9 @@ async def get_incident(run_id: str, incident_id: str) -> BreakdownIncident | Non
 
 
 def broken_truck_ids(incidents: list[BreakdownIncident]) -> set[str]:
-    """Trucks reported broken (any status except failed without replan)."""
+    """Trucks with an open breakdown (reported, awaiting replan, or approved)."""
     return {
         inc.truck_id
         for inc in incidents
-        if inc.status in ("pending_approval", "approved")
+        if inc.status in ("reported", "pending_approval", "approved")
     }

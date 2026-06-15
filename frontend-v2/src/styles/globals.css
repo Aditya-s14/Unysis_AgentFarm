@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
 @import 'leaflet/dist/leaflet.css';
 
 @tailwind base;
@@ -6,62 +6,167 @@
 @tailwind utilities;
 
 :root {
+  /* ── Brand palette ──────────────────────────────────────────────────────── */
+  --forest:        #0A3D2E;
+  --forest-mid:    #0F5B45;
+  --emerald:       #22A06B;
+  --sage:          #E8F5EE;
+  --mint:          #DFF4E8;
+  --sky-blue:      #4A90E2;
+  --water-blue:    #2196F3;
+  --harvest-gold:  #F4B63E;
+  --amber:         #FFC107;
+  --alert-red:     #E74C3C;
+
+  --brand-gradient: linear-gradient(135deg, #0A3D2E 0%, #0F5B45 50%, #22A06B 100%);
+
   /* ── Backgrounds ────────────────────────────────────────────────────────── */
-  --bg:            #0a1628;
-  --bg-subtle:     #0f1f38;
-  --bg-card:       #132540;
-  --bg-card-hover: #162d4a;
-  --bg-elevated:   #1a2f50;
-  --border:        #1e3a5c;
-  --border-hover:  #2d5a8a;
+  --bg:            var(--sage);
+  --bg-subtle:     var(--mint);
+  --bg-card:       #FFFFFF;
+  --bg-card-hover: #F5FBF8;
+  --bg-elevated:   #FFFFFF;
+  --border:        rgba(10, 61, 46, 0.14);
+  --border-hover:  rgba(10, 61, 46, 0.28);
 
-  /* ── Accent (green — agriculture + positive) ───────────────────────────── */
-  --accent:        #22c55e;
-  --accent-hover:  #16a34a;
-  --accent-light:  #86efac;
-  --accent-muted:  rgba(34, 197, 94, 0.10);
-  --accent-glow:   rgba(34, 197, 94, 0.20);
+  /* ── Accent (Emerald Green) ─────────────────────────────────────────────── */
+  --accent:        var(--emerald);
+  --accent-hover:  #1B8758;
+  --accent-light:  #5BC992;
+  --accent-muted:  rgba(34, 160, 107, 0.12);
+  --accent-glow:   rgba(34, 160, 107, 0.25);
+  --accent-text:   #FFFFFF;
 
-  /* ── Text ───────────────────────────────────────────────────────────────── */
-  --navy:          #f8fafc;
-  --navy-light:    #e2e8f0;
-  --text:          #e2e8f0;
-  --text-secondary:#94a3b8;
-  --text-tertiary: #64748b;
-  --text-inverse:  #0a1628;
+  /* ── Typography ─────────────────────────────────────────────────────────── */
+  --font-sans:     'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading:  'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --navy:          #111827;
+  --navy-light:    #374151;
+  --text:          #374151;
+  --text-secondary:#374151;
+  --text-tertiary: #6B7280;
+  --text-inverse:  #FFFFFF;
 
-  /* ── Semantic status colors (bright for dark bg — all ≥7:1 contrast) ───── */
-  --green-ok:      #4ade80;
-  --green-muted:   rgba(74, 222, 128, 0.10);
-  --red-risk:      #f87171;
-  --red-muted:     rgba(248, 113, 113, 0.10);
-  --blue-mandi:    #60a5fa;
-  --blue-muted:    rgba(96, 165, 250, 0.10);
-  --purple-log:    #c084fc;
-  --purple-muted:  rgba(192, 132, 252, 0.10);
-  --orange-dmd:    #fb923c;
-  --orange-muted:  rgba(251, 146, 60, 0.10);
-  --cyan-info:     #67e8f9;
-  --cyan-muted:    rgba(103, 232, 249, 0.10);
+  /* ── Semantic status colors ─────────────────────────────────────────────── */
+  --green-ok:      var(--emerald);
+  --green-muted:   rgba(34, 160, 107, 0.10);
+  --red-risk:      var(--alert-red);
+  --red-muted:     rgba(231, 76, 60, 0.10);
+  --blue-mandi:    var(--water-blue);
+  --blue-muted:    rgba(33, 150, 243, 0.10);
+  --purple-log:    var(--forest-mid);
+  --purple-muted:  rgba(15, 91, 69, 0.10);
+  --orange-dmd:    var(--harvest-gold);
+  --orange-muted:  rgba(244, 182, 62, 0.12);
+  --orange-selected: rgba(244, 182, 62, 0.08);
+  --cyan-info:     var(--sky-blue);
+  --cyan-muted:    rgba(74, 144, 226, 0.10);
+  --danger:        var(--alert-red);
+  --amber-warn:    var(--amber);
 
-  /* ── Alias: --danger maps to --red-risk (fixes undefined var across codebase) */
-  --danger:        #f87171;
+  /* ── Sidebar (forest gradient) ──────────────────────────────────────────── */
+  --sidebar-bg:           var(--brand-gradient);
+  --sidebar-border:       rgba(255, 255, 255, 0.15);
+  --sidebar-text:         #FFFFFF;
+  --sidebar-text-muted:   rgba(255, 255, 255, 0.72);
+  --sidebar-text-faint:   rgba(255, 255, 255, 0.50);
+  --sidebar-accent-muted: rgba(255, 255, 255, 0.15);
+  --sidebar-hover:        rgba(255, 255, 255, 0.08);
+  --sidebar-card-bg:      rgba(255, 255, 255, 0.12);
+  --sidebar-card-border:  rgba(255, 255, 255, 0.18);
 
   /* ── Glass / surface ────────────────────────────────────────────────────── */
-  --glass-bg:      rgba(19, 37, 64, 0.80);
-  --glass-border:  rgba(255, 255, 255, 0.08);
+  --glass-bg:      rgba(255, 255, 255, 0.88);
+  --glass-border:  rgba(10, 61, 46, 0.08);
 
   /* ── Shadows ────────────────────────────────────────────────────────────── */
-  --shadow-sm:     0 1px 4px rgba(0, 0, 0, 0.4);
-  --shadow-md:     0 4px 16px rgba(0, 0, 0, 0.5);
-  --shadow-lg:     0 8px 32px rgba(0, 0, 0, 0.6);
-  --shadow-card:   0 4px 24px rgba(0, 0, 0, 0.5);
-  --shadow-glow:   0 0 20px rgba(34, 197, 94, 0.15);
+  --shadow-sm:     0 1px 3px rgba(10, 61, 46, 0.06);
+  --shadow-md:     0 4px 16px rgba(10, 61, 46, 0.08);
+  --shadow-lg:     0 8px 32px rgba(10, 61, 46, 0.12);
+  --shadow-card:   0 2px 12px rgba(10, 61, 46, 0.06);
+  --shadow-glow:   0 0 20px rgba(34, 160, 107, 0.18);
 
   /* ── Layout ─────────────────────────────────────────────────────────────── */
   --sidebar-width:      260px;
   --sidebar-collapsed:  72px;
   --muted:              var(--text-tertiary);
+}
+
+[data-theme="dark"] {
+  --sage:          #0f1a16;
+  --mint:          #152820;
+  --brand-gradient: linear-gradient(135deg, #061510 0%, #0A3D2E 50%, #0F5B45 100%);
+
+  --bg:            #0f1a16;
+  --bg-subtle:     #152820;
+  --bg-card:       #1a2e26;
+  --bg-card-hover: #213830;
+  --bg-elevated:   #213830;
+  --border:        rgba(255, 255, 255, 0.10);
+  --border-hover:  rgba(255, 255, 255, 0.18);
+
+  --accent-muted:  rgba(34, 160, 107, 0.18);
+  --accent-glow:   rgba(34, 160, 107, 0.30);
+  --accent-light:  #5BC992;
+
+  --forest:        #5BC992;
+  --forest-mid:    #22A06B;
+  --navy:          #F3F4F6;
+  --navy-light:    #D1D5DB;
+  --text:          #D1D5DB;
+  --text-secondary:#E5E7EB;
+  --text-tertiary: #9CA3AF;
+
+  --green-muted:   rgba(34, 160, 107, 0.16);
+  --red-muted:     rgba(231, 76, 60, 0.14);
+  --blue-muted:    rgba(33, 150, 243, 0.14);
+  --purple-muted:  rgba(15, 91, 69, 0.22);
+  --orange-muted:  rgba(244, 182, 62, 0.18);
+  --orange-selected: rgba(244, 182, 62, 0.14);
+  --cyan-muted:    rgba(74, 144, 226, 0.14);
+
+  --sidebar-card-bg:     rgba(0, 0, 0, 0.22);
+  --sidebar-card-border: rgba(255, 255, 255, 0.12);
+
+  --glass-bg:      rgba(26, 46, 38, 0.92);
+  --glass-border:  rgba(255, 255, 255, 0.08);
+
+  --shadow-sm:     0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md:     0 4px 16px rgba(0, 0, 0, 0.40);
+  --shadow-lg:     0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-card:   0 2px 12px rgba(0, 0, 0, 0.30);
+  --shadow-glow:   0 0 20px rgba(34, 160, 107, 0.22);
+
+  --muted:         var(--text-tertiary);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+[data-theme="dark"] ::selection {
+  background: rgba(34, 160, 107, 0.35);
+  color: var(--navy);
+}
+
+[data-theme="dark"] .leaflet-control-attribution {
+  background: rgba(15, 26, 22, 0.92) !important;
+}
+
+[data-theme="dark"] .leaflet-tile-pane {
+  filter: brightness(0.82) contrast(1.05) saturate(0.85);
+}
+
+[data-theme="dark"] .metric-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--border) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    var(--border) 75%
+  );
 }
 
 *,
@@ -76,7 +181,7 @@ body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -94,24 +199,29 @@ button {
   cursor: pointer;
 }
 
-/* ── Headings use Space Grotesk ─────────────────────────────────────────── */
+/* ── Headings use IBM Plex Sans ─────────────────────────────────────────── */
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-family: var(--font-heading);
   font-weight: 600;
   color: var(--navy);
   line-height: 1.2;
 }
 
-/* ── Legacy .font-serif / .font-syne → Space Grotesk (preserves existing classnames) */
+/* ── Legacy class aliases → IBM Plex Sans ───────────────────────────────── */
 .font-serif {
-  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-family: var(--font-heading);
   font-weight: 700;
 }
 
 .font-syne {
-  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-family: var(--font-heading);
   letter-spacing: 0.01em;
   font-weight: 600;
+}
+
+.font-mono {
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
 }
 
 .tracking-wider-2 {
@@ -126,7 +236,7 @@ h1, h2, h3, h4, h5, h6 {
   background: linear-gradient(
     90deg,
     var(--border) 25%,
-    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.6) 50%,
     var(--border) 75%
   );
   background-size: 200% 100%;
@@ -140,8 +250,8 @@ h1, h2, h3, h4, h5, h6 {
   gap: 8px;
   padding: 10px 22px;
   background: var(--accent);
-  color: #052e16;
-  font-family: 'Space Grotesk', system-ui, sans-serif;
+  color: var(--accent-text);
+  font-family: var(--font-heading);
   font-weight: 600;
   font-size: 14px;
   letter-spacing: 0.01em;
@@ -153,7 +263,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 .btn-primary:hover {
   background: var(--accent-hover);
-  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.25);
+  box-shadow: 0 4px 16px rgba(34, 160, 107, 0.30);
   transform: translateY(-1px);
 }
 .btn-primary:active {
@@ -167,7 +277,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 10px 22px;
   background: transparent;
   color: var(--text-secondary);
-  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-family: var(--font-heading);
   font-weight: 500;
   font-size: 14px;
   border: 1px solid var(--border);
@@ -181,7 +291,7 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--accent-muted);
 }
 
-/* ── Dark card (replaces glassmorphism — better performance + legibility) ── */
+/* ── Cards ───────────────────────────────────────────────────────────────── */
 .glass-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -222,7 +332,7 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--text-tertiary);
-  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-family: var(--font-heading);
 }
 
 /* ── Staggered entrance ─────────────────────────────────────────────────── */
@@ -242,8 +352,8 @@ h1, h2, h3, h4, h5, h6 {
   50% { transform: none; animation-timing-function: cubic-bezier(0,0,0.2,1); }
 }
 @keyframes dot-pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.4); }
-  50%       { opacity: 0.7; box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 160, 107, 0.4); }
+  50%       { opacity: 0.7; box-shadow: 0 0 0 6px rgba(34, 160, 107, 0); }
 }
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
@@ -308,21 +418,21 @@ h1, h2, h3, h4, h5, h6 {
 /* ── Scrollbars ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+::-webkit-scrollbar-thumb { background: rgba(10, 61, 46, 0.20); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(10, 61, 46, 0.35); }
 
 ::selection {
-  background: rgba(34, 197, 94, 0.25);
+  background: rgba(34, 160, 107, 0.25);
   color: var(--navy);
 }
 
-/* ── Leaflet (dark theme) ───────────────────────────────────────────────── */
+/* ── Leaflet (light agricultural theme) ─────────────────────────────────── */
 .leaflet-container {
   width: 100%;
   height: 100%;
   min-height: 400px;
   background: var(--bg-subtle);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
 }
 
 .leaflet-popup-content-wrapper,
@@ -335,7 +445,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 .leaflet-popup-content {
   margin: 12px 16px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-sans);
   color: var(--text);
 }
 .leaflet-popup-close-button {
@@ -343,12 +453,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .leaflet-control-attribution {
-  background: rgba(10, 22, 40, 0.85) !important;
+  background: rgba(232, 245, 238, 0.92) !important;
   color: var(--text-tertiary) !important;
   font-size: 10px !important;
 }
 .leaflet-control-attribution a {
-  color: var(--accent) !important;
+  color: var(--forest) !important;
 }
 
 .leaflet-bar a,
@@ -358,6 +468,6 @@ h1, h2, h3, h4, h5, h6 {
   border-color: var(--border) !important;
 }
 .leaflet-bar a:hover {
-  background: var(--bg-elevated) !important;
+  background: var(--bg-subtle) !important;
   color: var(--accent) !important;
 }

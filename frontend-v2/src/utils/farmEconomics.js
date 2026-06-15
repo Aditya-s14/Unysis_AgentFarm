@@ -2,12 +2,13 @@ import { formatCurrency } from '@/utils/formatters';
 
 export function recommendationLabel(row) {
   if (row.recommendation === 'direct_accepted') return 'OFFER ACCEPTED';
+  if (row.recommendation === 'apmc_accepted') return 'APMC ACCEPTED';
   if (row.recommendation === 'switch_to_direct') return 'SWITCH TO DIRECT';
   return 'STAY APMC';
 }
 
 export function recommendationStyle(row) {
-  if (row.recommendation === 'direct_accepted') {
+  if (row.recommendation === 'direct_accepted' || row.recommendation === 'apmc_accepted') {
     return {
       color: 'var(--green-ok)',
       border: '1px solid var(--green-ok)',
@@ -18,7 +19,7 @@ export function recommendationStyle(row) {
     return {
       color: 'var(--accent)',
       border: '1px solid var(--accent)',
-      background: 'rgba(245, 166, 35, 0.08)',
+      background: 'var(--orange-selected)',
     };
   }
   return {

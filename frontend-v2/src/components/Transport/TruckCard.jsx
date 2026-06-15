@@ -73,7 +73,6 @@ export default function TruckCard({
   atRiskMap,
   mandiById,
   farmsById,
-  computeETA,
   canReportBreakdown,
   onReportBreakdown,
   runId,
@@ -83,7 +82,6 @@ export default function TruckCard({
   const label = displayTruckId(truck.id);
   const distancePending = !route || distanceKm <= 0;
   const distanceStr = distancePending ? null : `~${distanceKm.toFixed(0)} km`;
-  const etaTime = distancePending ? null : computeETA(distanceKm);
 
   const statusLabel = status === 'broken_down' ? 'BROKEN DOWN'
     : status === 'deviating' ? 'DEVIATING'
@@ -102,7 +100,7 @@ export default function TruckCard({
         border: isSelected ? '2px solid var(--accent)' : '1px solid var(--border)',
         borderTop: isSelected ? '2px solid var(--accent)' : '3px solid var(--purple-log)',
         borderRadius: '4px',
-        background: isSelected ? 'rgba(245, 166, 35, 0.06)' : 'var(--bg-card)',
+        background: isSelected ? 'var(--orange-selected)' : 'var(--bg-card)',
         cursor: 'pointer',
         transition: 'border-color 0.2s ease, background 0.2s ease',
         minHeight: '200px',
@@ -156,18 +154,18 @@ export default function TruckCard({
             <RouteLine farmNames={farmNames} dpNames={dpNames} />
 
             <p className="text-muted m-0 flex flex-wrap items-center gap-x-2 gap-y-1" style={{ fontSize: '11px' }}>
-              <span>Distance:</span>
+              <span className="uppercase" style={{ fontSize: '9px', letterSpacing: '0.1em' }}>
+                Distance
+              </span>
               {distancePending ? (
                 <MetricSkeleton width="72px" />
               ) : (
-                <span style={{ color: 'var(--text)' }}>{distanceStr}</span>
-              )}
-              <span aria-hidden>·</span>
-              <span>ETA</span>
-              {distancePending || etaTime === 'TBD' ? (
-                <MetricSkeleton width="56px" />
-              ) : (
-                <span style={{ color: 'var(--text)' }}>{etaTime}</span>
+                <span
+                  className="font-syne font-bold"
+                  style={{ color: 'var(--accent)', fontSize: '14px', letterSpacing: '0.02em' }}
+                >
+                  {distanceStr}
+                </span>
               )}
               <span aria-hidden>·</span>
               <span style={{ color: 'var(--text)' }}>

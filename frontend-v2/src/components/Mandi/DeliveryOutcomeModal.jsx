@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { buildMandiOutcomeDraft } from '@/utils/outcomePayload';
 import { formatApiError } from '@/utils/api';
+import { displayTruckId } from '@/utils/truckDisplay';
 
 function ReadOnlyField({ label, value, unit }) {
   return (
@@ -58,6 +59,7 @@ function EditableField({ label, value, onChange, unit, step = '1', min = '0' }) 
  */
 export default function DeliveryOutcomeModal({
   mandiRow,
+  truck,
   cached,
   rawRoutes,
   farms,
@@ -66,8 +68,8 @@ export default function DeliveryOutcomeModal({
   loading,
 }) {
   const draft = useMemo(
-    () => buildMandiOutcomeDraft({ cached, mandiRow, rawRoutes, farms }),
-    [cached, mandiRow, rawRoutes, farms],
+    () => buildMandiOutcomeDraft({ cached, mandiRow, truck, rawRoutes, farms }),
+    [cached, mandiRow, truck, rawRoutes, farms],
   );
 
   const [demandActual, setDemandActual] = useState(String(draft.demand_actual));
@@ -94,7 +96,9 @@ export default function DeliveryOutcomeModal({
     }
   };
 
-  if (!mandiRow) return null;
+  if (!mandiRow || !truck) return null;
+
+  const truckLabel = displayTruckId(truck.truck_id);
 
   return (
     <div
@@ -117,11 +121,11 @@ export default function DeliveryOutcomeModal({
           className="font-syne font-bold uppercase text-paper mb-1"
           style={{ fontSize: '14px', letterSpacing: '0.06em' }}
         >
-          Confirm delivery
+          Confirm delivery — {truckLabel}
         </p>
         <p className="text-muted mb-5" style={{ fontSize: '11px', lineHeight: 1.5 }}>
-          Record actual kg delivered, waste, and delivery time for {mandiRow.name}. This feeds Tier-2
-          demand bias correction on the next run.
+          Record actual kg delivered ({truck.load_kg?.toLocaleString()} kg expected), waste, and
+          delivery time for {mandiRow.name}. This feeds Tier-2 demand bias correction on the next run.
         </p>
 
         <div className="grid grid-cols-2 gap-4 mb-5 p-4" style={{ background: 'var(--bg)', borderRadius: '2px' }}>

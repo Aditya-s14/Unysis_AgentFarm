@@ -4,11 +4,11 @@ import { displayTruckId } from '@/utils/truckDisplay';
 function colorsForStatus(status) {
   switch (status) {
     case 'deviating':
-      return { stroke: '#FF4444', fill: '#FF4444' };
+      return { stroke: '#E74C3C', fill: '#E74C3C' };
     case 'stale':
       return { stroke: '#8A9E8C', fill: '#8A9E8C' };
     case 'on_route':
-      return { stroke: '#4CAF50', fill: '#4CAF50' };
+      return { stroke: '#22A06B', fill: '#22A06B' };
     default:
       return { stroke: '#F5A623', fill: '#F5A623' };
   }
@@ -35,7 +35,7 @@ export default function TruckMarker({ position, isSelected = false }) {
       }}
     >
       <Popup>
-        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12 }}>
+        <div style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 12 }}>
           <p style={{ margin: 0, fontWeight: 700, color: 'var(--accent)' }}>{label}</p>
           <p style={{ margin: '4px 0 0', color: 'var(--muted)' }}>
             Status: {(position.status || 'unknown').replace('_', ' ').toUpperCase()}

@@ -86,7 +86,7 @@ function OfferRow({ offer, onAccept, accepting, acceptFarmId, setAcceptFarmId })
               border: '1px solid var(--accent)',
               color: 'var(--accent)',
               borderRadius: '2px',
-              background: 'rgba(245, 166, 35, 0.05)',
+              background: 'var(--orange-selected)',
             }}
           >
             {accepting ? 'Accepting…' : 'Accept'}
@@ -182,7 +182,7 @@ export default function OfferLedgerPanel() {
       <div
         className="p-4"
         style={{
-          background: 'rgba(245, 166, 35, 0.03)',
+          background: 'var(--orange-selected)',
           border: '1px solid var(--border)',
           borderRadius: '4px',
         }}
@@ -229,7 +229,7 @@ export default function OfferLedgerPanel() {
                   letterSpacing: '0.1em',
                   border: `1px solid ${side === s ? 'var(--accent)' : 'var(--border)'}`,
                   color: side === s ? 'var(--accent)' : 'var(--muted)',
-                  background: side === s ? 'rgba(245, 166, 35, 0.08)' : 'transparent',
+                  background: side === s ? 'var(--orange-selected)' : 'transparent',
                   borderRadius: '2px',
                 }}
               >
@@ -308,7 +308,7 @@ export default function OfferLedgerPanel() {
             style={{
               fontSize: '11px',
               background: 'var(--accent)',
-              color: '#0D1F0F',
+              color: 'var(--forest)',
               borderRadius: '2px',
             }}
           >

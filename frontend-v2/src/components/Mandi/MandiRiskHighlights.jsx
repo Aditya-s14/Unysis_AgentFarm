@@ -49,7 +49,7 @@ export default function MandiRiskHighlights({ rows, cached, delayedRouteCount })
         border: '1px solid var(--border)',
         borderLeft: '3px solid var(--accent)',
         borderRadius: '4px',
-        background: 'rgba(245, 166, 35, 0.04)',
+        background: 'var(--orange-selected)',
       }}
     >
       <p

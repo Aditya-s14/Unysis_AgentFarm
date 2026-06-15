@@ -8,7 +8,14 @@ import {
   weatherSourceTooltip,
 } from '@/utils/weatherSummary';
 
-function SourceBadge({ children, color, borderColor, title }) {
+function riskBadgeBg(level) {
+  const key = String(level || 'normal').toLowerCase();
+  if (key === 'severe') return 'var(--red-muted)';
+  if (key === 'warning' || key === 'moderate') return 'var(--orange-muted)';
+  return 'var(--green-muted)';
+}
+
+function SourceBadge({ children, color, borderColor, title, background }) {
   return (
     <span
       className="font-mono uppercase inline-flex items-center gap-1"
@@ -20,6 +27,7 @@ function SourceBadge({ children, color, borderColor, title }) {
         border: `1px solid ${borderColor || color}`,
         borderRadius: '2px',
         padding: '3px 8px',
+        background: background || 'transparent',
         cursor: title ? 'help' : 'default',
       }}
     >
@@ -56,7 +64,7 @@ function SourceBadges({ data }) {
 
   if (mode === 'stale') {
     return (
-      <SourceBadge color="#FF9800" borderColor="#FF9800" title={tooltip}>
+      <SourceBadge color="var(--harvest-gold)" borderColor="var(--harvest-gold)" background="var(--orange-muted)" title={tooltip}>
         Last Known Weather
       </SourceBadge>
     );
@@ -64,7 +72,7 @@ function SourceBadges({ data }) {
 
   if (mode === 'synthetic') {
     return (
-      <SourceBadge color="#FF9800" borderColor="#FF9800" title={tooltip}>
+      <SourceBadge color="var(--harvest-gold)" borderColor="var(--harvest-gold)" background="var(--orange-muted)" title={tooltip}>
         Simulated Weather
       </SourceBadge>
     );
@@ -131,10 +139,10 @@ export default function WeatherRiskPanel({ data }) {
     <div
       className="px-4 py-4"
       style={{
-        border: '1px solid rgba(245, 166, 35, 0.45)',
+        border: '1px solid var(--border)',
         borderRadius: '4px',
-        background: 'rgba(245, 166, 35, 0.04)',
-        boxShadow: 'inset 0 0 0 1px rgba(245, 166, 35, 0.08)',
+        background: 'var(--orange-muted)',
+        boxShadow: 'inset 0 0 0 1px var(--border)',
       }}
     >
       <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
@@ -153,6 +161,7 @@ export default function WeatherRiskPanel({ data }) {
             border: `1px solid ${riskColor(riskLevel)}`,
             borderRadius: '2px',
             padding: '2px 8px',
+            background: riskBadgeBg(riskLevel),
           }}
         >
           {riskLevel != null && riskLevel !== '' ? `${riskLevel} risk` : 'N/A'}
@@ -179,7 +188,7 @@ export default function WeatherRiskPanel({ data }) {
       {(mode === 'stale' || disclaimer) && (
         <p
           className="font-mono mb-3 m-0"
-          style={{ fontSize: '11px', lineHeight: 1.5, color: '#FF9800' }}
+          style={{ fontSize: '11px', lineHeight: 1.5, color: 'var(--harvest-gold)' }}
         >
           {disclaimer
             || "Couldn't fetch the current weather update; showing the most recently fetched reading."}

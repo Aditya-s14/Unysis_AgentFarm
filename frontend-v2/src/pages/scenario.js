@@ -3,8 +3,6 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import DashboardLayout from '@/components/Dashboard/DashboardLayout';
 import ScenarioForm from '@/components/ScenarioBuilder/ScenarioForm';
-import PriceDiscoveryBoard from '@/components/Farmer/PriceDiscoveryBoard';
-import BuyerDemandPanel from '@/components/Buyer/BuyerDemandPanel';
 import FarmEconomicsPanel from '@/components/Farmer/FarmEconomicsPanel';
 import TruckGapAlertPanel from '@/components/Dashboard/TruckGapAlertPanel';
 import MapView from '@/components/Map/MapView';
@@ -19,6 +17,15 @@ import {
   DEMO_TRUCKS,
 } from '@/utils/demoFixtures';
 
+const TOTAL_CAPACITY = DEMO_TRUCKS.reduce((s, t) => s + t.capacity_kg, 0);
+
+const NETWORK_KPIS = [
+  { label: 'Farms', value: DEMO_FARMS.length, sub: 'Karnataka + Maharashtra', accent: 'var(--green-ok)' },
+  { label: 'Mandis', value: DEMO_DEMAND_POINTS.length, sub: 'APMC · private · retail', accent: 'var(--blue-mandi)' },
+  { label: 'Trucks', value: DEMO_TRUCKS.length, sub: 'Registered fleet', accent: 'var(--accent)' },
+  { label: 'Capacity', value: `${(TOTAL_CAPACITY / 1000).toFixed(0)}t`, sub: `${TOTAL_CAPACITY.toLocaleString()} kg total`, accent: 'var(--navy)' },
+];
+
 /**
  * Scenario page — state machine:
  *
@@ -28,7 +35,7 @@ import {
  *   done        Animation finished; show summary card + "View Dashboard →"
  */
 export default function ScenarioPage() {
-  const [simState, setSimState]       = useState('idle');   // 'idle' | 'running' | 'simulating' | 'done' | 'error'
+  const [simState, setSimState]       = useState('idle');
   const [simTraces, setSimTraces]     = useState([]);
   const [apiResult, setApiResult]     = useState(null);
   const [elapsedMs, setElapsedMs]     = useState(null);
@@ -84,27 +91,140 @@ export default function ScenarioPage() {
     startRef.current = null;
   };
 
-  /* ── Idle: original form + map ───────────────────────────────────────── */
+  /* ── Idle: scenario builder + map ──────────────────────────────────── */
   if (simState === 'idle') {
     return (
       <>
         <Head><title>Scenario | AgentFarm</title></Head>
-        <DashboardLayout title="Run a Scenario" subtitle={`${DEMO_FARMS.length} farms · ${DEMO_DEMAND_POINTS.length} mandis · ${DEMO_TRUCKS.length} trucks`}>
-          <div className="mb-4">
-            <TruckGapAlertPanel analysis={truckGap} />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 space-y-0">
-              <PriceDiscoveryBoard compact />
-              <BuyerDemandPanel compact />
-              <ScenarioForm
-                onRunStart={handleRunStart}
-                onComplete={handleRunComplete}
-                onError={handleRunError}
-              />
+        <DashboardLayout
+          title="Run a Scenario"
+          subtitle="Configure disruption · review network · launch agent pipeline"
+        >
+          <div className="space-y-6 max-w-[1400px]">
+            {/* Hero + network KPIs */}
+            <div
+              className="p-5 md:p-6"
+              style={{
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                background: 'linear-gradient(135deg, var(--accent-muted) 0%, var(--orange-muted) 100%)',
+              }}
+            >
+              <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-5">
+                <div>
+                  <p
+                    className="font-mono uppercase mb-2"
+                    style={{ color: 'var(--green-ok)', fontSize: '10px', letterSpacing: '0.16em' }}
+                  >
+                    FPO Scenario Builder
+                  </p>
+                  <h2
+                    className="font-syne font-bold"
+                    style={{ fontSize: '22px', color: 'var(--navy)', lineHeight: 1.25 }}
+                  >
+                    Plan today&apos;s supply chain under disruption
+                  </h2>
+                  <p className="font-mono text-muted mt-2 max-w-xl" style={{ fontSize: '12px', lineHeight: 1.6 }}>
+                    Six agents forecast demand, flag at-risk stock, and optimise routes across your demo network.
+                    Pick a scenario and run.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {NETWORK_KPIS.map((kpi) => (
+                  <div
+                    key={kpi.label}
+                    className="p-4"
+                    style={{
+                      border: '1px solid var(--border)',
+                      borderTop: `3px solid ${kpi.accent}`,
+                      borderRadius: '4px',
+                      background: 'var(--bg-card)',
+                    }}
+                  >
+                    <p
+                      className="font-mono uppercase text-muted"
+                      style={{ fontSize: '9px', letterSpacing: '0.12em' }}
+                    >
+                      {kpi.label}
+                    </p>
+                    <p
+                      className="font-syne font-bold mt-1"
+                      style={{ fontSize: '1.65rem', color: kpi.accent, lineHeight: 1 }}
+                    >
+                      {kpi.value}
+                    </p>
+                    <p className="font-mono text-muted mt-1" style={{ fontSize: '10px' }}>
+                      {kpi.sub}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="lg:col-span-2">
-              <MapView farms={DEMO_MAP_FARMS} demandPoints={DEMO_MAP_MANDIS} routes={[]} />
+
+            <TruckGapAlertPanel analysis={truckGap} />
+
+            {/* Main builder + map */}
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+              <div className="xl:col-span-5 space-y-0">
+                <div
+                  className="p-5 md:p-6"
+                  style={{
+                    border: '1px solid var(--border)',
+                    borderTop: '3px solid var(--accent)',
+                    borderRadius: '4px',
+                    background: 'var(--bg-card)',
+                  }}
+                >
+                  <ScenarioForm
+                    onRunStart={handleRunStart}
+                    onComplete={handleRunComplete}
+                    onError={handleRunError}
+                  />
+                </div>
+              </div>
+
+              <div className="xl:col-span-7 xl:sticky xl:top-[88px]">
+                <div
+                  className="overflow-hidden"
+                  style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    background: 'var(--bg-card)',
+                  }}
+                >
+                  <div
+                    className="px-5 py-3 flex items-baseline justify-between"
+                    style={{ borderBottom: '1px solid var(--border)' }}
+                  >
+                    <div>
+                      <h3
+                        className="font-syne font-bold uppercase tracking-wider text-paper"
+                        style={{ fontSize: '13px' }}
+                      >
+                        Network Preview
+                      </h3>
+                      <p className="font-mono text-muted mt-0.5" style={{ fontSize: '10px' }}>
+                        Farms, mandis, and routes appear here after a run
+                      </p>
+                    </div>
+                    <span
+                      className="font-mono uppercase px-2 py-0.5"
+                      style={{
+                        fontSize: '9px',
+                        letterSpacing: '0.1em',
+                        color: 'var(--muted)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '2px',
+                      }}
+                    >
+                      Pre-run
+                    </span>
+                  </div>
+                  <MapView farms={DEMO_MAP_FARMS} demandPoints={DEMO_MAP_MANDIS} routes={[]} />
+                </div>
+              </div>
             </div>
           </div>
         </DashboardLayout>
@@ -125,7 +245,7 @@ export default function ScenarioPage() {
                 border: '1px solid var(--red-risk)',
                 borderTop: '3px solid var(--red-risk)',
                 borderRadius: '4px',
-                background: 'rgba(255, 68, 68, 0.04)',
+                background: 'var(--red-muted)',
               }}
             >
               <div className="flex items-start gap-3">
@@ -184,7 +304,7 @@ export default function ScenarioPage() {
                 className="px-5 py-3 font-mono uppercase tracking-wider-2 transition"
                 style={{
                   background: 'var(--accent)',
-                  color: '#0D1F0F',
+                  color: 'var(--accent-text)',
                   fontSize: '12px',
                   fontWeight: 600,
                   borderRadius: '2px',
@@ -203,8 +323,6 @@ export default function ScenarioPage() {
   }
 
   /* ── Running / simulating / done ─────────────────────────────────────── */
-  // Prefer the confirmed type from the API response; fall back to the type
-  // captured at submit time (available immediately, before the API responds).
   const activeType    = apiResult?.scenario_type || selectedType;
   const scenarioLabel = activeType.replace(/_/g, ' ').toUpperCase();
   const wastePct      = apiResult?.kpis?.waste_reduction_pct ?? 0;
@@ -223,58 +341,160 @@ export default function ScenarioPage() {
             : 'Pipeline: 6 agents executing (5 core + orchestrator)'
         }
       >
-        <div className="max-w-2xl mx-auto space-y-6">
+        <div className="max-w-5xl mx-auto space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left: status + simulation */}
+            <div className="lg:col-span-2 space-y-6">
+              {simState !== 'done' && (
+                <div
+                  className="px-5 py-4"
+                  style={{
+                    border: '1px solid var(--border)',
+                    borderTop: '3px solid var(--accent)',
+                    borderRadius: '4px',
+                    background: 'var(--bg-card)',
+                  }}
+                >
+                  <p
+                    className="font-mono uppercase mb-1"
+                    style={{ color: 'var(--accent)', fontSize: '0.65rem', letterSpacing: '0.2em' }}
+                  >
+                    ▸ scenario in progress
+                  </p>
+                  <p className="font-syne font-bold uppercase tracking-wider-2" style={{ fontSize: '15px' }}>
+                    {scenarioLabel}
+                  </p>
+                  <p className="font-mono text-muted mt-1" style={{ fontSize: '11px' }}>
+                    {simState === 'running'
+                      ? 'Waiting for backend pipeline to respond (~30s)...'
+                      : 'Replaying agent execution trace...'}
+                  </p>
+                </div>
+              )}
 
-          {/* ── Header label while running ── */}
-          {simState !== 'done' && (
-            <div
-              className="px-5 py-4"
-              style={{
-                border: '1px solid var(--border)',
-                borderTop: '3px solid var(--accent)',
-                borderRadius: '4px',
-                background: 'var(--bg-card)',
-              }}
-            >
-              <p
-                className="font-mono uppercase mb-1"
-                style={{ color: 'var(--accent)', fontSize: '0.65rem', letterSpacing: '0.2em' }}
-              >
-                ▸ scenario in progress
-              </p>
-              <p className="font-syne font-bold uppercase tracking-wider-2" style={{ fontSize: '15px' }}>
-                {scenarioLabel}
-              </p>
-              <p className="font-mono text-muted mt-1" style={{ fontSize: '11px' }}>
-                {simState === 'running'
-                  ? 'Waiting for backend pipeline to respond (~30s)...'
-                  : 'Replaying agent execution trace...'}
-              </p>
+              {apiResult?.weather_summary && (
+                <WeatherSourceBanner weatherSummary={apiResult.weather_summary} />
+              )}
+
+              <TruckGapAlertPanel analysis={truckGap || apiResult?.calendar_alert} />
+
+              <SimulationPanel
+                traces={simTraces}
+                isRunning={simState !== 'done'}
+                scenarioType={activeType}
+                onComplete={handleSimComplete}
+              />
+
+              {simState === 'done' && apiResult && (
+                <FarmEconomicsPanel compact cachedRun={apiResult} />
+              )}
             </div>
-          )}
 
-          {apiResult?.weather_summary && (
-            <WeatherSourceBanner weatherSummary={apiResult.weather_summary} />
-          )}
+            {/* Right: live stats sidebar */}
+            <div className="space-y-4">
+              <div
+                className="p-5 space-y-4"
+                style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  background: 'var(--bg-card)',
+                  position: 'sticky',
+                  top: 88,
+                }}
+              >
+                <p
+                  className="font-mono uppercase"
+                  style={{ color: 'var(--muted)', fontSize: '9px', letterSpacing: '0.14em' }}
+                >
+                  Run status
+                </p>
 
-          <TruckGapAlertPanel analysis={truckGap || apiResult?.calendar_alert} />
+                <div className="space-y-3">
+                  <StatusRow label="Scenario" value={scenarioLabel} />
+                  <StatusRow
+                    label="Phase"
+                    value={
+                      simState === 'running'
+                        ? 'Backend'
+                        : simState === 'simulating'
+                          ? 'Replay'
+                          : 'Complete'
+                    }
+                    accent={simState === 'done' ? 'var(--green-ok)' : 'var(--accent)'}
+                  />
+                  {elapsedSec && (
+                    <StatusRow label="Elapsed" value={`${elapsedSec}s`} />
+                  )}
+                </div>
 
-          {/* ── Simulation panel ── */}
-          <SimulationPanel
-            traces={simTraces}
-            isRunning={simState !== 'done'}
-            scenarioType={activeType}
-            onComplete={handleSimComplete}
-          />
+                {simState === 'done' && (
+                  <>
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                      <p
+                        className="font-mono uppercase mb-3"
+                        style={{ color: 'var(--green-ok)', fontSize: '9px', letterSpacing: '0.14em' }}
+                      >
+                        Plan KPIs
+                      </p>
+                      <div className="space-y-3">
+                        <StatChip
+                          label="waste reduction"
+                          value={`${Number(wastePct).toFixed(1)}%`}
+                          accent="var(--green-ok)"
+                          compact
+                        />
+                        <StatChip
+                          label="farms covered"
+                          value={String(Math.round(coveredCount))}
+                          compact
+                        />
+                        <StatChip
+                          label="routes"
+                          value={String(Math.round(routeCount))}
+                          compact
+                        />
+                      </div>
+                    </div>
 
-          {/* ── Done: farm economics + summary card ── */}
-          {simState === 'done' && apiResult && (
-            <FarmEconomicsPanel compact cachedRun={apiResult} />
-          )}
+                    <div className="flex flex-col gap-2 pt-2">
+                      <Link
+                        href="/dashboard"
+                        className="px-4 py-3 font-mono uppercase tracking-wider-2 text-center"
+                        style={{
+                          background: 'var(--accent)',
+                          color: 'var(--accent-text)',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          borderRadius: '4px',
+                          letterSpacing: '0.15em',
+                        }}
+                      >
+                        View Dashboard →
+                      </Link>
+                      <button
+                        onClick={handleReset}
+                        className="px-4 py-2.5 font-mono uppercase tracking-wider-2 hover:text-accent hover:border-accent transition"
+                        style={{
+                          color: 'var(--muted)',
+                          border: '1px solid var(--border)',
+                          fontSize: '10px',
+                          borderRadius: '4px',
+                          letterSpacing: '0.15em',
+                          background: 'transparent',
+                        }}
+                      >
+                        Run Another
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
 
           {simState === 'done' && (
             <div
-              className="p-6 space-y-4"
+              className="p-5"
               style={{
                 border: '1px solid var(--border)',
                 borderTop: '3px solid var(--green-ok)',
@@ -282,69 +502,12 @@ export default function ScenarioPage() {
                 background: 'var(--bg-card)',
               }}
             >
-              <p
-                className="font-mono uppercase"
-                style={{ color: 'var(--green-ok)', fontSize: '0.65rem', letterSpacing: '0.2em' }}
-              >
-                ▸ plan generated successfully
-              </p>
-
               <p className="font-mono" style={{ fontSize: '12px', color: 'var(--green-ok)', lineHeight: 1.55 }}>
-                ✅ Pipeline completed — 6 agents (Weather, Demand, Inventory, Logistics, Validator, Orchestrator)
+                Pipeline completed — Weather, Demand, Inventory, Logistics, Validator, and Orchestrator agents finished.
+                {Math.round(routeCount)} route{routeCount !== 1 ? 's' : ''} dispatched ·{' '}
+                {Math.round(coveredCount)} at-risk farms covered ·{' '}
+                {Number(wastePct).toFixed(1)}% waste reduction vs naive baseline.
               </p>
-
-              <div className="grid grid-cols-3 gap-4">
-                <StatChip
-                  label="elapsed"
-                  value={elapsedSec ? `${elapsedSec}s` : '—'}
-                />
-                <StatChip
-                  label="waste reduction"
-                  value={`${Number(wastePct).toFixed(1)}%`}
-                  accent="var(--green-ok)"
-                />
-                <StatChip
-                  label="farms covered"
-                  value={`${Math.round(coveredCount)} / ${Math.round(coveredCount) || '—'}`}
-                />
-              </div>
-
-              <p className="font-mono text-muted" style={{ fontSize: '12px' }}>
-                {Math.round(routeCount)} route{routeCount !== 1 ? 's' : ''} dispatched &nbsp;·&nbsp;
-                {Math.round(coveredCount)} at-risk farms covered &nbsp;·&nbsp;
-                {Number(wastePct).toFixed(1)}% waste reduction vs naive baseline
-              </p>
-
-              <div className="flex gap-3 pt-2">
-                <Link
-                  href="/dashboard"
-                  className="px-5 py-3 font-mono uppercase tracking-wider-2"
-                  style={{
-                    background: 'var(--accent)',
-                    color: '#0D1F0F',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    borderRadius: '2px',
-                    letterSpacing: '0.15em',
-                  }}
-                >
-                  View Dashboard →
-                </Link>
-                <button
-                  onClick={handleReset}
-                  className="px-5 py-3 font-mono uppercase tracking-wider-2 hover:text-accent hover:border-accent transition"
-                  style={{
-                    color: 'var(--muted)',
-                    border: '1px solid var(--border)',
-                    fontSize: '12px',
-                    borderRadius: '2px',
-                    letterSpacing: '0.15em',
-                    background: 'transparent',
-                  }}
-                >
-                  Run Another
-                </button>
-              </div>
             </div>
           )}
         </div>
@@ -353,24 +516,40 @@ export default function ScenarioPage() {
   );
 }
 
-function StatChip({ label, value, accent }) {
+function StatusRow({ label, value, accent }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="font-mono uppercase text-muted" style={{ fontSize: '9px', letterSpacing: '0.1em' }}>
+        {label}
+      </span>
+      <span
+        className="font-syne font-bold text-right truncate"
+        style={{ fontSize: '12px', color: accent || 'var(--text)' }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function StatChip({ label, value, accent, compact }) {
   return (
     <div
-      className="p-3 text-center"
+      className="p-3 flex items-center justify-between gap-3"
       style={{
         border: '1px solid var(--border)',
         borderRadius: '4px',
         background: 'var(--bg)',
       }}
     >
+      <p className="font-mono text-muted uppercase" style={{ fontSize: compact ? '9px' : '10px', letterSpacing: '0.12em' }}>
+        {label}
+      </p>
       <p
         className="font-syne font-bold"
-        style={{ fontSize: '20px', color: accent || 'var(--text)', letterSpacing: '0.05em' }}
+        style={{ fontSize: compact ? '16px' : '20px', color: accent || 'var(--text)' }}
       >
         {value}
-      </p>
-      <p className="font-mono text-muted mt-1 uppercase" style={{ fontSize: '10px', letterSpacing: '0.15em' }}>
-        {label}
       </p>
     </div>
   );

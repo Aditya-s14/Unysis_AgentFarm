@@ -5,7 +5,11 @@ import { buildMandiOutcomePayload } from '@/utils/outcomePayload';
 
 const storageKey = (runId) => `agentfarm_outcomes_${runId}`;
 
-function loadLoggedMandiIds(runId) {
+function truckLogKey(mandiId, truckId) {
+  return `${mandiId}::${truckId}`;
+}
+
+function loadLoggedKeys(runId) {
   if (!runId || typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(storageKey(runId));
@@ -16,10 +20,10 @@ function loadLoggedMandiIds(runId) {
   }
 }
 
-function persistLoggedMandiIds(runId, ids) {
+function persistLoggedKeys(runId, keys) {
   if (!runId || typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(storageKey(runId), JSON.stringify(ids));
+    window.localStorage.setItem(storageKey(runId), JSON.stringify(keys));
   } catch {
     /* non-fatal */
   }
@@ -29,25 +33,27 @@ function persistLoggedMandiIds(runId, ids) {
  * Wrap POST /api/outcome/log and track logged mandi IDs per run.
  */
 export default function useOutcomeLog(runId) {
-  const [loggedMandiIds, setLoggedMandiIds] = useState([]);
+  const [loggedKeys, setLoggedKeys] = useState([]);
   const [logging, setLogging] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    setLoggedMandiIds(loadLoggedMandiIds(runId));
+    setLoggedKeys(loadLoggedKeys(runId));
   }, [runId]);
 
-  const markLogged = useCallback((mandiId) => {
-    setLoggedMandiIds((prev) => {
-      if (prev.includes(mandiId)) return prev;
-      const next = [...prev, mandiId];
-      persistLoggedMandiIds(runId, next);
+  const markLogged = useCallback((mandiId, truckId) => {
+    const key = truckId ? truckLogKey(mandiId, truckId) : mandiId;
+    setLoggedKeys((prev) => {
+      if (prev.includes(key)) return prev;
+      const next = [...prev, key];
+      persistLoggedKeys(runId, next);
       return next;
     });
   }, [runId]);
 
   const logMandiOutcome = useCallback(async ({
     mandiRow,
+    truck,
     cached,
     rawRoutes,
     farms,
@@ -56,8 +62,12 @@ export default function useOutcomeLog(runId) {
     if (!runId || !mandiRow?.id) {
       throw new Error('Missing run or mandi context');
     }
-    if (loggedMandiIds.includes(mandiRow.id)) {
-      throw new Error('Outcome already logged for this mandi');
+    if (!truck?.truck_id) {
+      throw new Error('Select a truck to confirm delivery');
+    }
+    const key = truckLogKey(mandiRow.id, truck.truck_id);
+    if (loggedKeys.includes(key)) {
+      throw new Error('Outcome already logged for this truck');
     }
 
     setLogging(true);
@@ -66,13 +76,14 @@ export default function useOutcomeLog(runId) {
       const payload = await buildMandiOutcomePayload({
         cached,
         mandiRow,
+        truck,
         rawRoutes,
         farms,
         runId,
         actualOverrides,
       });
       await logOutcome(payload);
-      markLogged(mandiRow.id);
+      markLogged(mandiRow.id, truck.truck_id);
       return payload;
     } catch (err) {
       const msg = formatApiError(err);
@@ -81,18 +92,28 @@ export default function useOutcomeLog(runId) {
     } finally {
       setLogging(false);
     }
-  }, [runId, loggedMandiIds, markLogged]);
+  }, [runId, loggedKeys, markLogged]);
+
+  const isTruckLogged = useCallback(
+    (mandiId, truckId) => loggedKeys.includes(truckLogKey(mandiId, truckId)),
+    [loggedKeys],
+  );
 
   const isLogged = useCallback(
-    (mandiId) => loggedMandiIds.includes(mandiId),
-    [loggedMandiIds],
+    (mandiId, trucks = []) => {
+      const withLoad = trucks.filter((t) => (t.load_kg ?? 0) > 0);
+      if (withLoad.length === 0) return loggedKeys.includes(mandiId);
+      return withLoad.every((t) => isTruckLogged(mandiId, t.truck_id));
+    },
+    [loggedKeys, isTruckLogged],
   );
 
   return {
     logMandiOutcome,
     logging,
     error,
-    loggedMandiIds,
+    loggedKeys,
     isLogged,
+    isTruckLogged,
   };
 }

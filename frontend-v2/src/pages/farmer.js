@@ -5,6 +5,7 @@ import CropReadyToggle from '@/components/Farmer/CropReadyToggle';
 import WeatherForecastStrip from '@/components/Farmer/WeatherForecastStrip';
 import TruckETACard from '@/components/Farmer/TruckETACard';
 import ArrivalConfirmButton from '@/components/Farmer/ArrivalConfirmButton';
+import FarmWeatherChips from '@/components/Farmer/FarmWeatherChips';
 import PriceDiscoveryBoard from '@/components/Farmer/PriceDiscoveryBoard';
 import FarmEconomicsPanel from '@/components/Farmer/FarmEconomicsPanel';
 import withAuth from '@/components/withAuth';
@@ -12,7 +13,7 @@ import { useAppContext } from '@/context/AppContext';
 import { useCachedRunResponse } from '@/hooks/useRuns';
 import { getMarketCommitmentsForApi } from '@/hooks/useMarketOffers';
 import { DEMO_FARMS } from '@/utils/demoFixtures';
-import { resolveWeatherPanel } from '@/utils/weatherSummary';
+import { resolveWeatherPanel, resolveFarmWeatherReading } from '@/utils/weatherSummary';
 
 function FarmerPage() {
   const { user } = useAppContext();
@@ -33,6 +34,11 @@ function FarmerPage() {
 
   const weatherPanel = useMemo(() => resolveWeatherPanel(cached), [cached]);
 
+  const farmWeatherReading = useMemo(
+    () => resolveFarmWeatherReading(cached, farmId),
+    [cached, farmId],
+  );
+
   const atRiskStock = useMemo(() => {
     const m = {};
     (cached?.at_risk_stock || []).forEach((s) => { m[s.farm_id] = s; });
@@ -46,6 +52,14 @@ function FarmerPage() {
     return new Set(commitments.map((c) => c.farm_id));
   }, [cached, runId]);
 
+  const farmWeatherById = useMemo(() => {
+    const m = {};
+    DEMO_FARMS.forEach((f) => {
+      m[f.id] = resolveFarmWeatherReading(cached, f.id);
+    });
+    return m;
+  }, [cached]);
+
   if (user?.role === 'fpo') {
     return (
       <>
@@ -57,9 +71,9 @@ function FarmerPage() {
               const route = rawRoutes.find((r) => (r.stops || []).some((st) => st.label === f.id));
               const guaranteed = guaranteedFarmIds.has(f.id);
               return (
-                <div key={f.id} className="p-4 flex items-center justify-between"
+                <div key={f.id} className="p-4 flex items-center justify-between gap-4 flex-wrap"
                   style={{ border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--bg-card)' }}>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-syne font-bold text-[13px] flex items-center gap-2 flex-wrap" style={{ color: 'var(--text)' }}>
                       {f.name}
                       {guaranteed && (
@@ -83,13 +97,16 @@ function FarmerPage() {
                       {route ? ` · Truck ${route.truck_id}` : ' · No truck assigned'}
                     </p>
                   </div>
+                  <FarmWeatherChips reading={farmWeatherById[f.id]} />
+                  <div className="shrink-0">
                   {s ? (
                     <span className="font-mono text-[11px] px-2 py-0.5" style={{ color: 'var(--red-risk)', border: '1px solid var(--red-risk)', borderRadius: '2px' }}>
                       {s.kg_at_risk?.toLocaleString()} kg at risk
                     </span>
                   ) : (
-                    <span className="font-mono text-[11px]" style={{ color: 'var(--green-ok)' }}>OK</span>
+                    <span className="font-mono text-[11px] px-2 py-0.5" style={{ color: 'var(--green-ok)', border: '1px solid var(--green-ok)', borderRadius: '2px' }}>OK</span>
                   )}
+                  </div>
                 </div>
               );
             })}
@@ -117,7 +134,7 @@ function FarmerPage() {
               style={{
                 border: '1px solid var(--red-risk)',
                 borderRadius: '4px',
-                background: 'rgba(220,50,50,0.05)',
+                background: 'var(--red-muted)',
               }}
             >
               <span style={{ color: 'var(--red-risk)', fontSize: '18px' }}>&#9888;</span>
@@ -137,7 +154,7 @@ function FarmerPage() {
           <CropReadyToggle farmId={farmId} />
           <TruckETACard farmId={farmId} rawRoutes={rawRoutes} />
           <ArrivalConfirmButton runId={runId} farmId={farmId} />
-          <WeatherForecastStrip weatherPanel={weatherPanel} />
+          <WeatherForecastStrip weatherPanel={weatherPanel} farmReading={farmWeatherReading} />
           <FarmEconomicsPanel farmId={farmId} />
 
           {farm && (
